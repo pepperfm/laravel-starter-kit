@@ -42,7 +42,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(UrlGenerator $url): void
     {
-        if (!$this->app->isLocal() && !$this->app->runningUnitTests()) {
+        if (!$this->app->isLocal() && !$this->app->runningInConsole()) {
             $url->forceScheme('https');
         }
 
@@ -54,7 +54,12 @@ class AppServiceProvider extends ServiceProvider
             static fn(Request $request) => Limit::perMinute(60)->by($request->user()?->id ?: $request->ip())
         );
 
-        $this->configureFilament();
+        if (
+            class_exists(\Filament\Facades\Filament::class) &&
+            array_key_exists(\Filament\FilamentServiceProvider::class, $this->app->getLoadedProviders())
+        ) {
+            $this->configureFilament();
+        }
     }
 
     protected function configureFilament(): void
