@@ -10,7 +10,9 @@ if (!function_exists('user')) {
      */
     function user(?string $guard = null): ?\Illuminate\Contracts\Auth\Authenticatable
     {
-        return \Filament\Facades\Filament::auth()->user();
+        return class_exists(\Filament\Facades\Filament::class) ?
+            \Filament\Facades\Filament::auth()->user() :
+            auth($guard)->user();
     }
 }
 
