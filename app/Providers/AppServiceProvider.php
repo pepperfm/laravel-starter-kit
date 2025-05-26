@@ -4,17 +4,6 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
-use Filament\Forms\Components\DatePicker;
-use Filament\Forms\Components\DateTimePicker;
-use Filament\Forms\Components\Section;
-use Filament\Forms\Components\Select;
-use Filament\Tables\Actions\CreateAction;
-use Filament\Tables\Actions\DeleteAction;
-use Filament\Tables\Actions\EditAction;
-use Filament\Tables\Actions\ViewAction;
-use Filament\Tables\Columns\Column;
-use Filament\Tables\Filters\SelectFilter;
-use Filament\Tables\Table;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
@@ -64,39 +53,49 @@ class AppServiceProvider extends ServiceProvider
 
     protected function configureFilament(): void
     {
-        Select::configureUsing(
-            static fn(Select $select) => $select->searchDebounce(500)->native(false)
+        \Filament\Forms\Components\Select::configureUsing(
+            static fn(\Filament\Forms\Components\Select $select) => $select->searchDebounce(500)->native(false)
         );
-        SelectFilter::configureUsing(
-            static fn(SelectFilter $select) => $select->native(false)
+        \Filament\Tables\Filters\SelectFilter::configureUsing(
+            static fn(\Filament\Tables\Filters\SelectFilter $select) => $select->native(false)
         );
-        DatePicker::configureUsing(
-            static fn(DatePicker $datePicker) => $datePicker
+        \Filament\Forms\Components\DatePicker::configureUsing(
+            static fn(\Filament\Forms\Components\DatePicker $datePicker) => $datePicker
                 ->native(false)
                 ->displayFormat('d.m.Y')
                 ->suffixIcon('heroicon-m-calendar')
         );
-        DateTimePicker::configureUsing(
-            static fn(DateTimePicker $datePicker) => $datePicker
+        \Filament\Forms\Components\DateTimePicker::configureUsing(
+            static fn(\Filament\Forms\Components\DateTimePicker $datePicker) => $datePicker
                 ->native(false)
                 ->displayFormat('d.m.Y, H:i:s')
                 ->suffixIcon('heroicon-m-calendar')
         );
-        Column::configureUsing(
-            static fn(Column $column) => $column
+        \Filament\Tables\Columns\Column::configureUsing(
+            static fn(\Filament\Tables\Columns\Column $column) => $column
                 ->placeholder('-')
                 ->searchable(isIndividual: true, isGlobal: false)
         );
 
-        Section::configureUsing(static fn(Section $section) => $section->maxWidth('xl'));
+        \Filament\Forms\Components\Section::configureUsing(
+            static fn(\Filament\Forms\Components\Section $section) => $section->maxWidth('xl')
+        );
 
-        CreateAction::configureUsing(static fn(CreateAction $action) => $action->createAnother(false));
-        EditAction::configureUsing(static fn(EditAction $action) => $action->iconButton());
-        ViewAction::configureUsing(static fn(ViewAction $action) => $action->iconButton());
-        DeleteAction::configureUsing(static fn(DeleteAction $action) => $action->iconButton());
+        \Filament\Tables\Actions\CreateAction::configureUsing(
+            static fn(\Filament\Tables\Actions\CreateAction $action) => $action->createAnother(false)
+        );
+        \Filament\Tables\Actions\EditAction::configureUsing(
+            static fn(\Filament\Tables\Actions\EditAction $action) => $action->iconButton()
+        );
+        \Filament\Tables\Actions\ViewAction::configureUsing(
+            static fn(\Filament\Tables\Actions\ViewAction $action) => $action->iconButton()
+        );
+        \Filament\Tables\Actions\DeleteAction::configureUsing(
+            static fn(\Filament\Tables\Actions\DeleteAction $action) => $action->iconButton()
+        );
 
-        Table::configureUsing(
-            static fn(Table $table) => $table
+        \Filament\Tables\Table::configureUsing(
+            static fn(\Filament\Tables\Table $table) => $table
                 ->striped()
                 ->paginated([10, 25, 50])
                 ->deferLoading()
