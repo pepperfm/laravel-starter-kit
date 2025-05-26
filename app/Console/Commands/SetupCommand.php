@@ -91,7 +91,6 @@ class SetupCommand extends Command
         } else {
             warning('⚠️ Auto build skipped. Post-install commands were not executed.');
         }
-
         if (empty($this->installedPackages)) {
             note('⚠️ No packages selected for installation.');
         } else {
