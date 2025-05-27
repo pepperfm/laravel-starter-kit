@@ -12,9 +12,9 @@ feature-reached admin panel — ready for production from day one.
 - Choose your Admin Panel during setup:
   - [Filament](https://filamentphp.com) — beautiful, customizable full-stack components
   - [Moonshine](https://moonshine-laravel.com) — comfortable, user-friendly admin panel
-- Pre-installed API utilities:
-    - [pepperfm/api-responder-for-laravel](https://docs.pepperfm.com/api-responder-for-laravel)
-    - [spatie/laravel-data](https://github.com/spatie/laravel-data)
+- Choose your API utility during setup:
+  - [pepperfm/api-responder-for-laravel](https://docs.pepperfm.com/api-responder-for-laravel)
+  - [spatie/laravel-data](https://github.com/spatie/laravel-data)
 - Ready-to-use Swagger API docs with [l5-swagger](https://github.com/DarkaOnLine/L5-Swagger)
 - Telegram bot integration via [defstudio/telegraph](https://github.com/defstudio/telegraph)
 - Local development environment powered by [Laravel Sail](https://laravel.com/docs/sail)
