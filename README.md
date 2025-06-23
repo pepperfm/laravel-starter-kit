@@ -1,5 +1,5 @@
-[![Latest Version on Packagist](https://img.shields.io/packagist/v/pepperfm/laravel-filament-starter-kit.svg?style=flat-square)](https://packagist.org/packages/pepperfm/laravel-filament-starter-kit)
-[![Total Downloads](https://img.shields.io/packagist/dt/pepperfm/laravel-filament-starter-kit.svg?style=flat-square)](https://packagist.org/packages/pepperfm/laravel-filament-starter-kit)
+[![Latest Version on Packagist](https://img.shields.io/packagist/v/pepperfm/laravel-starter-kit.svg?style=flat-square)](https://packagist.org/packages/pepperfm/laravel-starter-kit)
+[![Total Downloads](https://img.shields.io/packagist/dt/pepperfm/laravel-starter-kit.svg?style=flat-square)](https://packagist.org/packages/pepperfm/laravel-starter-kit)
 
 # [Laravel Starter Kit](https://docs.pepperfm.com/laravel-starter-kit)
 
