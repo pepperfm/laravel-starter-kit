@@ -4,21 +4,18 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use Illuminate\Support\ServiceProvider;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Illuminate\Routing\UrlGenerator;
 use Illuminate\Support\Facades\RateLimiter;
-use Illuminate\Support\ServiceProvider;
 
 /**
  * @property \Illuminate\Foundation\Application $app
  */
 class AppServiceProvider extends ServiceProvider
 {
-    /**
-     * Register any application services.
-     */
     public function register(): void
     {
         \Illuminate\Support\Carbon::setLocale(config('app.locale'));
@@ -43,10 +40,7 @@ class AppServiceProvider extends ServiceProvider
             static fn(Request $request) => Limit::perMinute(60)->by($request->user()?->id ?: $request->ip())
         );
 
-        if (
-            class_exists(\Filament\Facades\Filament::class) &&
-            array_key_exists(\Filament\FilamentServiceProvider::class, $this->app->getLoadedProviders())
-        ) {
+        if (class_exists(\Filament\Facades\Filament::class)) {
             $this->configureFilament();
         }
     }
