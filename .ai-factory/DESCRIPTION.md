@@ -11,14 +11,14 @@
 - Интерактивная команда `php artisan starter:setup` для настройки `.env`, выбора optional admin frontend preset, API-поддержки и дополнительных пакетов.
 - Laravel Sail окружение с PostgreSQL 17 и Redis.
 - Базовый web entry point через `routes/web.php` и `resources/views/welcome.blade.php`.
-- Подготовленные quality tools: Pest, Larastan, Pint, composer git hooks, Laravel Boost, Laravel Brain и PepperFM AI Guidelines.
+- Подготовленные quality tools: Pest, Larastan, Pint, Laravel Boost, Laravel Brain и PepperFM AI Guidelines.
 - Опциональные интеграции через setup-команду: custom admin frontend foundation, Swagger/L5 Swagger, Spatie Laravel Data, API responder, Telegraph, MediaLibrary, Permissions, Ray.
 
 ## Исключения из целевого контекста
 
 - Не использовать Filament как архитектурную основу для новых планов.
 - Не использовать Moonshine как архитектурную основу для новых планов.
-- Оставшиеся следы legacy admin flow, включая guest redirect на `/admin`, считать текущими implementation details, а не направлением развития.
+- Единый целевой URL новой admin area — `/panel`.
 - Новую admin area проектировать отдельным планом после уточнения требований.
 
 ## Tech Stack
@@ -40,7 +40,7 @@
 - `app/Console/Commands/SetupCommand.php` содержит интерактивную установку опциональных пакетов и optional admin frontend preset.
 - `app/Setup/AdminPanelFrontendInstaller.php` публикует admin frontend stubs и выбирает host/Sail команду установки frontend dependencies.
 - `app/Bootstrap/WithExceptions.php` централизует JSON error responses для API-запросов.
-- `app/Bootstrap/WithMiddleware.php` сейчас перенаправляет гостей на `/admin`; это legacy detail и не должно считаться целевой нормой.
+- `app/Bootstrap/WithMiddleware.php` перенаправляет гостей на `/panel`.
 - `app/Models/User.php` — базовая Eloquent user model.
 - `resources/` содержит стартовые Blade/CSS/JS ассеты.
 - `tests/Feature/ArchTest.php` задает базовые architecture expectations для strict types, enum/interfaces namespaces и запрета debug helpers.

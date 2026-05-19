@@ -48,7 +48,7 @@ tests/                # Pest feature and architecture tests
 | `app/Setup/AdminPanelFrontendInstaller.php` | Публикация optional Inertia/Vue/Nuxt UI admin frontend preset |
 | `routes/web.php` | Web route definitions |
 | `app/Bootstrap/WithExceptions.php` | JSON error rendering для API-запросов |
-| `app/Bootstrap/WithMiddleware.php` | Текущий guest redirect; будет уточняться вместе с новой admin area |
+| `app/Bootstrap/WithMiddleware.php` | Guest redirect на `/panel` для новой admin area |
 | `app/Providers/AppServiceProvider.php` | Общие Laravel boot rules |
 | `docker-compose.yml` | Sail services: app, PostgreSQL, Redis |
 | `vite.config.js` | Vite/Laravel asset pipeline |
