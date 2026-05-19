@@ -5,22 +5,26 @@
     "keywords": ["laravel", "framework", "starter"],
     "license": "MIT",
     "require": {
-        "php": "^8.3",
-        "laravel/framework": "^12.0",
+        "php": "^8.4",
+        "laravel/framework": "^13.0",
         "laravel/prompts": "^0.3.5",
-        "laravel/tinker": "^2.10.1"
+        "laravel/tinker": "^3.0"
     },
     "require-dev": {
         "brainmaestro/composer-git-hooks": "^3.0",
-        "barryvdh/laravel-debugbar": "^3.14",
         "fakerphp/faker": "^1.23",
+        "fruitcake/laravel-debugbar": "^4.2",
+        "laramint/laravel-brain": "^2.2",
         "larastan/larastan": "^3.2",
+        "laravel/boost": "^2.4",
         "laravel/pint": "^1.13",
         "laravel/sail": "^1.26",
         "mockery/mockery": "^1.6",
         "nunomaduro/collision": "^8.6",
-        "pestphp/pest": "^3.7",
-        "pestphp/pest-plugin-laravel": "^3.1"
+        "pepperfm/ai-guidelines": "^1.5",
+        "pestphp/pest": "^4.0",
+        "pestphp/pest-plugin-laravel": "^4.0",
+        "spatie/laravel-ray": "^1.43"
     },
     "autoload": {
         "files": [

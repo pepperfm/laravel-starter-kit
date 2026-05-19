@@ -1,0 +1,79 @@
+# AGENTS.md
+
+> Карта проекта для AI agents и разработчиков. Обновляйте файл при значимых изменениях структуры.
+
+## Project Overview
+
+Laravel starter kit для PepperFM с интерактивной setup-командой, Sail окружением и AI/dev quality tooling. Текущие Filament/Moonshine admin panel опции не входят в целевой контекст, потому что админская часть будет переделываться отдельно.
+
+## Tech Stack
+
+- **Programming language:** PHP 8.4+
+- **Framework:** Laravel 13
+- **Database:** PostgreSQL 17 через Sail
+- **Cache/queue:** Redis через Sail, стандартные Laravel config files
+- **Frontend:** Blade + Vite assets
+- **Tests:** Pest 4, Pest Laravel 4, Larastan, Pint
+- **AI/dev tooling:** Laravel Boost, Laravel Brain, PepperFM AI Guidelines
+
+## Project Structure
+
+```text
+app/
+  Bootstrap/          # Laravel bootstrap customizers for exceptions and middleware
+  Console/Commands/   # Starter kit interactive setup command
+  Exceptions/         # Typed application/http exceptions
+  Http/Controllers/   # Standard Laravel controllers
+  Models/             # Eloquent models
+  Providers/          # Laravel service providers
+bootstrap/            # Laravel bootstrap files
+config/               # Laravel configuration
+database/             # Migrations, factories, seeders
+docker/               # Sail Docker image and PostgreSQL test database setup
+resources/            # Blade views, CSS, JS
+routes/               # Web and console routes
+tests/                # Pest feature and architecture tests
+.ai-factory/          # AI Factory project context
+.codex/               # Project-local Codex skills and config
+```
+
+## Key Entry Points
+
+| File | Purpose |
+| --- | --- |
+| `artisan` | Laravel CLI entry point |
+| `app/Console/Commands/SetupCommand.php` | Интерактивная настройка starter kit и установка опциональных пакетов |
+| `routes/web.php` | Web route definitions |
+| `app/Bootstrap/WithExceptions.php` | JSON error rendering для API-запросов |
+| `app/Bootstrap/WithMiddleware.php` | Текущий guest redirect; связан с legacy admin flow |
+| `app/Providers/AppServiceProvider.php` | Общие Laravel boot rules и текущие Filament customizations |
+| `docker-compose.yml` | Sail services: app, PostgreSQL, Redis |
+| `vite.config.js` | Vite/Laravel asset pipeline |
+| `tests/Feature/ArchTest.php` | Architecture expectations для PHP-кода |
+
+## Documentation
+
+| Document | Path | Description |
+| --- | --- | --- |
+| README | `README.md` | Публичное описание starter kit и установки |
+| AI Factory description | `.ai-factory/DESCRIPTION.md` | Текущий AI context проекта |
+| Architecture | `.ai-factory/ARCHITECTURE.md` | Архитектурные правила для будущих изменений |
+| Base rules | `.ai-factory/rules/base.md` | Автоопределенные conventions и ограничения |
+
+## AI Context Files
+
+| File | Purpose |
+| --- | --- |
+| `AGENTS.md` | Быстрая карта проекта для AI agents |
+| `.ai-factory/config.yaml` | Настройки языка, путей, workflow и git для AI Factory |
+| `.ai-factory/DESCRIPTION.md` | Описание проекта, stack и исключения |
+| `.ai-factory/ARCHITECTURE.md` | Архитектурный ориентир для планов и реализации |
+| `.ai-factory/rules/base.md` | Базовые project rules |
+
+## Agent Rules
+
+- Команды с shell control operators разбивать на отдельные шаги.
+  - Неверно: `git checkout master && git pull`
+  - Верно: сначала `git checkout master`, затем `git pull origin master`
+- Не считать Filament/Moonshine целевой архитектурой или обязательной dependency.
+- Не писать бизнес-код во время setup-контекста; для изменений использовать `$aif-plan`, затем `$aif-implement`.
