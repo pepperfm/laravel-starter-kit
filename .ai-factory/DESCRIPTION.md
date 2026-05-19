@@ -4,15 +4,15 @@
 
 `pepperfm/laravel-starter-kit` — Laravel starter kit для быстрого запуска PHP-приложений с готовой локальной средой, AI/dev quality tooling и интерактивной установкой опциональных пакетов.
 
-Текущий контекст проекта намеренно не строится вокруг прежних admin panel вариантов. Filament и Moonshine исключены из setup-команды и README, потому что админская часть будет проектироваться отдельно.
+Текущий контекст проекта намеренно не строится вокруг прежних admin panel вариантов. Filament и Moonshine исключены из setup-команды и README. Новая админка начинается как optional frontend foundation на Inertia + Vue + Nuxt UI.
 
 ## Core Features
 
-- Интерактивная команда `php artisan starter:setup` для настройки `.env`, выбора API-поддержки и дополнительных пакетов.
+- Интерактивная команда `php artisan starter:setup` для настройки `.env`, выбора optional admin frontend preset, API-поддержки и дополнительных пакетов.
 - Laravel Sail окружение с PostgreSQL 17 и Redis.
 - Базовый web entry point через `routes/web.php` и `resources/views/welcome.blade.php`.
 - Подготовленные quality tools: Pest, Larastan, Pint, composer git hooks, Laravel Boost, Laravel Brain и PepperFM AI Guidelines.
-- Опциональные интеграции через setup-команду: Swagger/L5 Swagger, Spatie Laravel Data, API responder, Telegraph, MediaLibrary, Permissions, Ray.
+- Опциональные интеграции через setup-команду: custom admin frontend foundation, Swagger/L5 Swagger, Spatie Laravel Data, API responder, Telegraph, MediaLibrary, Permissions, Ray.
 
 ## Исключения из целевого контекста
 
@@ -25,7 +25,7 @@
 
 - **Programming language:** PHP 8.4+
 - **Framework:** Laravel 13
-- **Frontend assets:** Vite 6, Laravel Vite Plugin, plain Blade/CSS/JS skeleton
+- **Frontend assets:** plain Blade/CSS/JS skeleton by default; optional admin preset publishes Inertia 3, Vue 3, TypeScript, Nuxt UI 4, Tailwind CSS 4, Ziggy, Vue I18n, VueUse and Valibot files
 - **Database:** PostgreSQL 17 в Sail, SQLite может использоваться стандартными Laravel сценариями
 - **Cache/queue support:** Redis в Sail, стандартные Laravel queue/cache конфиги
 - **Testing:** Pest 4 + Pest Laravel 4, Pest Arch, mutation/profanity plugins
@@ -37,7 +37,8 @@
 
 ## Текущая структура
 
-- `app/Console/Commands/SetupCommand.php` содержит интерактивную установку опциональных пакетов.
+- `app/Console/Commands/SetupCommand.php` содержит интерактивную установку опциональных пакетов и optional admin frontend preset.
+- `app/Setup/AdminPanelFrontendInstaller.php` публикует admin frontend stubs и выбирает host/Sail команду установки frontend dependencies.
 - `app/Bootstrap/WithExceptions.php` централизует JSON error responses для API-запросов.
 - `app/Bootstrap/WithMiddleware.php` сейчас перенаправляет гостей на `/admin`; это legacy detail и не должно считаться целевой нормой.
 - `app/Models/User.php` — базовая Eloquent user model.

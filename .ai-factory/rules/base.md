@@ -15,6 +15,8 @@
 - Базовый Laravel skeleton сохраняет стандартные директории `app/`, `routes/`, `config/`, `database/`, `resources/`, `tests/`.
 - Новую доменную функциональность добавлять через module/application service boundaries, не раздувая controllers и setup-command.
 - `app/Console/Commands/SetupCommand.php` отвечает только за интерактивную установку starter kit опций.
+- Optional admin frontend preset публикуется через setup installer, а не через ручную правку runtime-кода.
+- Команды установки dependencies должны явно разделять host и Sail режимы; не смешивать `bun/npm/composer/artisan` вызовы без проверки окружения.
 - Admin panel код и пакеты Filament/Moonshine не считать целевым модулем: новая админка будет отдельным решением.
 
 ## Error Handling
@@ -39,4 +41,5 @@
 ## Admin Panels
 
 - Filament и Moonshine исключены из текущего AI context как целевые админки.
+- Целевой frontend foundation новой админки: Inertia + Vue + TypeScript + Nuxt UI, устанавливаемый как optional preset.
 - Не добавлять новые планы, architecture decisions или rules, завязанные на Filament/Moonshine, пока не будет отдельной задачи на новую admin area.

@@ -1,0 +1,22 @@
+{
+  "panel": {
+    "app": {
+      "name": "Admin"
+    },
+    "dashboard": {
+      "title": "Dashboard",
+      "description": "A clean admin frontend foundation is ready."
+    },
+    "navigation": {
+      "dashboard": "Dashboard"
+    },
+    "common": {
+      "back_to_site": "Back to site",
+      "theme": {
+        "appearance": "Appearance",
+        "dark": "Dark",
+        "light": "Light"
+      }
+    }
+  }
+}

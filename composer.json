@@ -41,7 +41,6 @@
         }
     },
     "scripts": {
-        "post-install-cmd": "cghooks add --ignore-lock",
         "post-autoload-dump": [
             "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
             "@php artisan package:discover --ansi"
@@ -59,15 +58,6 @@
         ]
     },
     "extra": {
-        "hooks": {
-            "pre-commit": [
-                "echo committing as $(git config user.name)",
-                "./vendor/bin/sail pint -v --test"
-            ],
-            "pre-push": [
-                "./vendor/bin/sail test"
-            ]
-        },
         "laravel": {
             "dont-discover": []
         }

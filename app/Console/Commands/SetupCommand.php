@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Setup\AdminPanelFrontendInstaller;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Process;
 
@@ -25,12 +26,17 @@ final class SetupCommand extends Command
      */
     protected array $installedDevPackages = [];
 
-    public function handle(): int
+    protected bool $adminFrontendRequested = false;
+
+    protected ?bool $sailProxyAvailable = null;
+
+    public function handle(AdminPanelFrontendInstaller $adminPanelFrontendInstaller): int
     {
         info('🔧 Laravel Starter Kit: Optional Setup');
 
         $this->configureEnvironment();
 
+        $this->askAdminFrontend();
         $this->askApiSupport();
         $this->askExtras();
 
@@ -40,16 +46,55 @@ final class SetupCommand extends Command
             return self::SUCCESS;
         }
 
-        $this->requirePackages($this->installedPackages, dev: false);
-        $this->requirePackages($this->installedDevPackages, dev: true);
+        $packagesInstalled = $this->requirePackages($this->installedPackages, dev: false);
+        $devPackagesInstalled = $this->requirePackages($this->installedDevPackages, dev: true);
 
-        if (!$this->option('no-post')) {
-            $this->runSelectedPostInstallCommands();
+        if (!$packagesInstalled || !$devPackagesInstalled) {
+            warning('⚠ Setup stopped because package installation failed.');
+
+            return self::FAILURE;
+        }
+
+        if ($this->adminFrontendRequested) {
+            $adminFrontendInstalled = $adminPanelFrontendInstaller->install(
+                usingSail: $this->usingSail(),
+                sailCommand: $this->getSailCommand(),
+            );
+
+            if (!$adminFrontendInstalled) {
+                warning('⚠ Setup stopped because admin frontend installation failed.');
+
+                return self::FAILURE;
+            }
+        }
+
+        if (!$this->option('no-post') && !$this->runSelectedPostInstallCommands()) {
+            warning('⚠ Setup stopped because a post-install command failed.');
+
+            return self::FAILURE;
         }
 
         note('✅ Setup complete.');
 
         return self::SUCCESS;
+    }
+
+    protected function askAdminFrontend(): void
+    {
+        $this->adminFrontendRequested = confirm(
+            label: 'Install custom admin frontend foundation?',
+            default: false,
+            hint: 'Publishes the Inertia + Vue + Nuxt UI panel preset.',
+        );
+
+        if (!$this->adminFrontendRequested) {
+            note('⚠️ Skipping admin frontend foundation.');
+
+            return;
+        }
+
+        $this->installedPackages[] = 'inertiajs/inertia-laravel:^3.0';
+        $this->installedPackages[] = 'tightenco/ziggy:^2.5';
     }
 
     protected function askApiSupport(): void
@@ -108,11 +153,11 @@ final class SetupCommand extends Command
      * @param array<int, string> $packages
      * @param bool $dev
      */
-    protected function requirePackages(array $packages, bool $dev): void
+    protected function requirePackages(array $packages, bool $dev): bool
     {
         $packages = array_values(array_unique(array_filter(array_map('trim', $packages))));
         if ($packages === []) {
-            return;
+            return true;
         }
 
         $isSail = $this->usingSail();
@@ -139,27 +184,32 @@ final class SetupCommand extends Command
         if ($process->successful()) {
             $this->output->write($process->output());
 
-            return;
+            return true;
         }
 
         warning('⚠ Failed to install: ' . implode(', ', $packages));
         $this->output->write($process->errorOutput());
+
+        return false;
     }
 
-    protected function runSelectedPostInstallCommands(): void
+    protected function runSelectedPostInstallCommands(): bool
     {
         $all = array_merge($this->installedPackages, $this->installedDevPackages);
+        $successful = true;
 
         foreach ($all as $packageSpec) {
             $package = $this->packageName($packageSpec);
-            $this->runPostInstallCommands($package);
+            $successful = $this->runPostInstallCommands($package) && $successful;
         }
+
+        return $successful;
     }
 
     /*
      * Run package-specific post-install artisan commands.
      */
-    protected function runPostInstallCommands(string $package): void
+    protected function runPostInstallCommands(string $package): bool
     {
         $commands = [
             'darkaonline/l5-swagger' => [
@@ -171,7 +221,7 @@ final class SetupCommand extends Command
                 ['migrate'],
             ],
             'spatie/laravel-ray' => [
-                $this->usingSail() ? ['ray:publish-config', '--docker'] : ['ray:publish-config'],
+                $this->hasSailCommand() ? ['ray:publish-config', '--docker'] : ['ray:publish-config'],
             ],
             'spatie/laravel-medialibrary' => [
                 ['vendor:publish', '--provider=Spatie\\MediaLibrary\\MediaLibraryServiceProvider', '--tag=medialibrary-migrations'],
@@ -185,8 +235,10 @@ final class SetupCommand extends Command
         ];
 
         if (!isset($commands[$package])) {
-            return;
+            return true;
         }
+
+        $successful = true;
 
         foreach ($commands[$package] as $cmd) {
             $isSail = $this->usingSail();
@@ -209,7 +261,10 @@ final class SetupCommand extends Command
 
             warning("⚠ Post-install command failed for $package: " . implode(' ', $command));
             $this->output->write($process->errorOutput());
+            $successful = false;
         }
+
+        return $successful;
     }
 
     protected function configureEnvironment(): void
@@ -268,7 +323,25 @@ final class SetupCommand extends Command
 
     protected function usingSail(): bool
     {
-        return is_executable(base_path('sail')) || is_executable(base_path('vendor/bin/sail'));
+        if ($this->sailProxyAvailable !== null) {
+            return $this->sailProxyAvailable;
+        }
+
+        if ($this->runningInsideSail() || !$this->hasSailCommand()) {
+            return $this->sailProxyAvailable = false;
+        }
+
+        $process = Process::path(base_path())
+            ->timeout(10)
+            ->run(['docker', 'compose', 'ps', '--services', '--filter', 'status=running']);
+
+        if (!$process->successful()) {
+            return $this->sailProxyAvailable = false;
+        }
+
+        $runningServices = array_filter(array_map('trim', explode(PHP_EOL, $process->output())));
+
+        return $this->sailProxyAvailable = in_array('app', $runningServices, true);
     }
 
     protected function getSailCommand(): string
@@ -278,5 +351,17 @@ final class SetupCommand extends Command
         }
 
         return './vendor/bin/sail';
+    }
+
+    protected function hasSailCommand(): bool
+    {
+        return is_executable(base_path('sail')) || is_executable(base_path('vendor/bin/sail'));
+    }
+
+    protected function runningInsideSail(): bool
+    {
+        $value = $_ENV['LARAVEL_SAIL'] ?? getenv('LARAVEL_SAIL');
+
+        return filter_var($value, FILTER_VALIDATE_BOOL);
     }
 }

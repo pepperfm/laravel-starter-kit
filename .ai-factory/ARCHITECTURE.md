@@ -11,7 +11,7 @@
 - **Project type:** Laravel starter kit с интерактивной установкой опциональных компонентов.
 - **Tech stack:** PHP 8.4+, Laravel 13, Sail, PostgreSQL, Redis, Pest 4/Larastan/Pint.
 - **Key factor:** нужна структура для роста без преждевременного DDD/hexagonal формализма.
-- **Admin note:** Filament и Moonshine исключены из целевого контекста; новая admin area должна проектироваться отдельным модулем после уточнения требований.
+- **Admin note:** Filament и Moonshine исключены из целевого контекста; новая admin area начинается с optional Inertia/Vue/Nuxt UI frontend foundation и должна расширяться отдельными модулями после уточнения требований.
 
 ## Folder Structure
 

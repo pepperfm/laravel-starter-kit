@@ -1,0 +1,22 @@
+{
+  "panel": {
+    "app": {
+      "name": "Админка"
+    },
+    "dashboard": {
+      "title": "Панель",
+      "description": "Базовый frontend-фундамент админки готов."
+    },
+    "navigation": {
+      "dashboard": "Панель"
+    },
+    "common": {
+      "back_to_site": "На сайт",
+      "theme": {
+        "appearance": "Оформление",
+        "dark": "Темная",
+        "light": "Светлая"
+      }
+    }
+  }
+}

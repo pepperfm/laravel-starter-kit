@@ -4,7 +4,7 @@
 
 ## Project Overview
 
-Laravel starter kit для PepperFM с интерактивной setup-командой, Sail окружением и AI/dev quality tooling. Filament/Moonshine не входят в setup flow и целевой контекст, потому что админская часть будет проектироваться отдельно.
+Laravel starter kit для PepperFM с интерактивной setup-командой, Sail окружением и AI/dev quality tooling. Filament/Moonshine не входят в setup flow. Для новой админки используется optional custom frontend foundation на Inertia + Vue + Nuxt UI.
 
 ## Tech Stack
 
@@ -12,7 +12,7 @@ Laravel starter kit для PepperFM с интерактивной setup-кома
 - **Framework:** Laravel 13
 - **Database:** PostgreSQL 17 через Sail
 - **Cache/queue:** Redis через Sail, стандартные Laravel config files
-- **Frontend:** Blade + Vite assets
+- **Frontend:** Blade + Vite assets by default; optional Inertia 3 + Vue 3 + TypeScript + Nuxt UI 4 admin preset
 - **Tests:** Pest 4, Pest Laravel 4, Larastan, Pint
 - **AI/dev tooling:** Laravel Boost, Laravel Brain, PepperFM AI Guidelines
 
@@ -22,6 +22,7 @@ Laravel starter kit для PepperFM с интерактивной setup-кома
 app/
   Bootstrap/          # Laravel bootstrap customizers for exceptions and middleware
   Console/Commands/   # Starter kit interactive setup command
+  Setup/              # Setup installers for optional starter-kit presets
   Exceptions/         # Typed application/http exceptions
   Http/Controllers/   # Standard Laravel controllers
   Models/             # Eloquent models
@@ -32,6 +33,7 @@ database/             # Migrations, factories, seeders
 docker/               # Sail Docker image and PostgreSQL test database setup
 resources/            # Blade views, CSS, JS
 routes/               # Web and console routes
+stubs/                # Publishable starter-kit presets and Laravel stubs
 tests/                # Pest feature and architecture tests
 .ai-factory/          # AI Factory project context
 .codex/               # Project-local Codex skills and config
@@ -43,6 +45,7 @@ tests/                # Pest feature and architecture tests
 | --- | --- |
 | `artisan` | Laravel CLI entry point |
 | `app/Console/Commands/SetupCommand.php` | Интерактивная настройка starter kit и установка опциональных пакетов |
+| `app/Setup/AdminPanelFrontendInstaller.php` | Публикация optional Inertia/Vue/Nuxt UI admin frontend preset |
 | `routes/web.php` | Web route definitions |
 | `app/Bootstrap/WithExceptions.php` | JSON error rendering для API-запросов |
 | `app/Bootstrap/WithMiddleware.php` | Текущий guest redirect; будет уточняться вместе с новой admin area |
