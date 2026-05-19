@@ -31,14 +31,13 @@ final class SetupCommand extends Command
 
         $this->configureEnvironment();
 
-        $this->askAdminPanel();
         $this->askApiSupport();
         $this->askExtras();
 
         if ($this->installedPackages === [] && $this->installedDevPackages === []) {
             note('⚠️ No packages selected for installation.');
 
-            return static::SUCCESS;
+            return self::SUCCESS;
         }
 
         $this->requirePackages($this->installedPackages, dev: false);
@@ -50,28 +49,7 @@ final class SetupCommand extends Command
 
         note('✅ Setup complete.');
 
-        return static::SUCCESS;
-    }
-
-    protected function askAdminPanel(): void
-    {
-        $adminNeeded = confirm('Will this app use an Admin Panel?', default: true);
-
-        if (!$adminNeeded) {
-            note('⚠️ Skipping Admin Panel installation.');
-            return;
-        }
-
-        $adminChoice = select(
-            label: 'Which Admin Panel would you like to install?',
-            options: [
-                'filament/filament:^4.0' => '✨ Filament v4 — Panel builder (admin panel)',
-                'moonshine/moonshine' => '🌙 Moonshine — admin panel',
-            ],
-            default: 'filament/filament:^4.0',
-        );
-
-        $this->installedPackages[] = (string) $adminChoice;
+        return self::SUCCESS;
     }
 
     protected function askApiSupport(): void
@@ -80,6 +58,7 @@ final class SetupCommand extends Command
 
         if (!$apiNeeded) {
             note('⚠️ Skipping API support installation.');
+
             return;
         }
 
@@ -115,6 +94,7 @@ final class SetupCommand extends Command
         foreach ($otherChoices as $selected) {
             if ($selected === 'spatie/laravel-ray') {
                 $this->installedDevPackages[] = $selected;
+
                 continue;
             }
 
@@ -126,6 +106,7 @@ final class SetupCommand extends Command
      * Run composer require for specified packages.
      *
      * @param array<int, string> $packages
+     * @param bool $dev
      */
     protected function requirePackages(array $packages, bool $dev): void
     {
@@ -157,6 +138,7 @@ final class SetupCommand extends Command
 
         if ($process->successful()) {
             $this->output->write($process->output());
+
             return;
         }
 
@@ -180,12 +162,6 @@ final class SetupCommand extends Command
     protected function runPostInstallCommands(string $package): void
     {
         $commands = [
-            'moonshine/moonshine' => [
-                ['moonshine:install'],
-            ],
-            'filament/filament' => [
-                ['filament:install', '--panels'],
-            ],
             'darkaonline/l5-swagger' => [
                 ['vendor:publish', '--provider=L5Swagger\\L5SwaggerServiceProvider'],
                 ['l5-swagger:generate'],
@@ -227,46 +203,13 @@ final class SetupCommand extends Command
 
             if ($process->successful()) {
                 $this->output->write($process->output());
+
                 continue;
             }
 
             warning("⚠ Post-install command failed for $package: " . implode(' ', $command));
             $this->output->write($process->errorOutput());
         }
-
-        if ($package === 'filament/filament') {
-            $this->maybeCreateFilamentUser();
-        }
-    }
-
-    protected function maybeCreateFilamentUser(): void
-    {
-        $create = confirm(
-            label: 'Create an admin user for Filament now?',
-            hint: 'Runs: php artisan make:filament-user',
-        );
-
-        if (!$create) {
-            return;
-        }
-
-        $command = $this->usingSail()
-            ? [$this->getSailCommand(), 'php', 'artisan', 'make:filament-user']
-            : ['php', 'artisan', 'make:filament-user'];
-
-        info('→ Running: ' . implode(' ', $command));
-
-        $process = Process::path(base_path())
-            ->timeout(600)
-            ->run($command);
-
-        if ($process->successful()) {
-            $this->output->write($process->output());
-            return;
-        }
-
-        warning('⚠ Failed to create Filament user.');
-        $this->output->write($process->errorOutput());
     }
 
     protected function configureEnvironment(): void
@@ -280,6 +223,7 @@ final class SetupCommand extends Command
 
         if (!file_exists($envPath)) {
             warning('⚠️ .env file not found, skipping environment configuration.');
+
             return;
         }
 
@@ -318,6 +262,7 @@ final class SetupCommand extends Command
     protected function packageName(string $packageSpec): string
     {
         $parts = explode(':', $packageSpec, 2);
+
         return trim($parts[0]);
     }
 

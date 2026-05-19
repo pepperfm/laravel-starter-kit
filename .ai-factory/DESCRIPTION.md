@@ -4,7 +4,7 @@
 
 `pepperfm/laravel-starter-kit` — Laravel starter kit для быстрого запуска PHP-приложений с готовой локальной средой, AI/dev quality tooling и интерактивной установкой опциональных пакетов.
 
-Текущий контекст проекта намеренно не строится вокруг двух существующих admin panel вариантов. Filament и Moonshine рассматриваются как временные/legacy опции в setup-команде и README, потому что админская часть будет переделываться отдельно.
+Текущий контекст проекта намеренно не строится вокруг прежних admin panel вариантов. Filament и Moonshine исключены из setup-команды и README, потому что админская часть будет проектироваться отдельно.
 
 ## Core Features
 
@@ -18,7 +18,7 @@
 
 - Не использовать Filament как архитектурную основу для новых планов.
 - Не использовать Moonshine как архитектурную основу для новых планов.
-- Существующие ссылки на Filament/Moonshine в `app/Console/Commands/SetupCommand.php`, `app/helpers.php`, `app/Providers/AppServiceProvider.php`, `app/Bootstrap/WithMiddleware.php` и `README.md` считать текущими implementation details, а не направлением развития.
+- Оставшиеся следы legacy admin flow, включая guest redirect на `/admin`, считать текущими implementation details, а не направлением развития.
 - Новую admin area проектировать отдельным планом после уточнения требований.
 
 ## Tech Stack
@@ -39,7 +39,7 @@
 
 - `app/Console/Commands/SetupCommand.php` содержит интерактивную установку опциональных пакетов.
 - `app/Bootstrap/WithExceptions.php` централизует JSON error responses для API-запросов.
-- `app/Bootstrap/WithMiddleware.php` сейчас перенаправляет гостей на `/admin`; это связано с текущей admin panel моделью и не должно считаться целевой нормой.
+- `app/Bootstrap/WithMiddleware.php` сейчас перенаправляет гостей на `/admin`; это legacy detail и не должно считаться целевой нормой.
 - `app/Models/User.php` — базовая Eloquent user model.
 - `resources/` содержит стартовые Blade/CSS/JS ассеты.
 - `tests/Feature/ArchTest.php` задает базовые architecture expectations для strict types, enum/interfaces namespaces и запрета debug helpers.

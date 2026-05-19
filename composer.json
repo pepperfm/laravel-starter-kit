@@ -11,7 +11,6 @@
         "laravel/tinker": "^3.0"
     },
     "require-dev": {
-        "brainmaestro/composer-git-hooks": "^3.0",
         "fakerphp/faker": "^1.23",
         "fruitcake/laravel-debugbar": "^4.2",
         "laramint/laravel-brain": "^2.2",
@@ -42,14 +41,12 @@
         }
     },
     "scripts": {
-        "cghooks": "./vendor/bin/cghooks",
         "post-install-cmd": "cghooks add --ignore-lock",
         "post-autoload-dump": [
             "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
             "@php artisan package:discover --ansi"
         ],
         "post-update-cmd": [
-            "cghooks update",
             "@php artisan vendor:publish --tag=laravel-assets --ansi --force"
         ],
         "post-root-package-install": [

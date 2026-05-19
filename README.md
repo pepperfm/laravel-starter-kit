@@ -3,15 +3,12 @@
 
 # [Laravel Starter Kit](https://docs.pepperfm.com/laravel-starter-kit)
 
-A modern, developer-friendly Laravel starter kit featuring a curated selection of tools and a polished,
-feature-reached admin panel — ready for production from day one.
+A modern, developer-friendly Laravel starter kit featuring a curated selection of tools and a pragmatic
+setup flow — ready for production-focused application work from day one.
 
 ## ✨ Features
 
-- Laravel 12, PHP 8.3+ support
-- Choose your Admin Panel during setup:
-  - [Filament](https://filamentphp.com) — beautiful, customizable full-stack components
-  - [Moonshine](https://moonshine-laravel.com) — comfortable, user-friendly admin panel
+- Laravel 13, PHP 8.4+ support
 - Choose your API utility during setup:
   - [pepperfm/api-responder-for-laravel](https://docs.pepperfm.com/api-responder-for-laravel)
   - [spatie/laravel-data](https://github.com/spatie/laravel-data)
@@ -28,7 +25,6 @@ feature-reached admin panel — ready for production from day one.
 laravel new example-app --using=pepperfm/laravel-starter-kit
 ```
 After creating your project, the interactive starter:setup command will run automatically, helping you choose:
-- Whether to install Filament or Moonshine admin panel (or skip both)
 - API support packages and Swagger docs
 - Optional features like Telegram bot integration, Ray debugger, Media Library, and Permissions
 
@@ -37,7 +33,7 @@ You will also be prompted to configure environment variables `WWWUSER` and `WWWG
 ✅ If you agree to automatic build and launch with Sail, the setup will:
 - Install selected composer packages
 - Build and start Sail containers
-- Generate an app key and run post-install artisan commands specific to installed packages (e.g., `filament:install --panels` or `moonshine:install`)
+- Generate an app key and run post-install artisan commands specific to installed packages
 
 ❌ If you decline, run them manually:
 ```bash
@@ -61,12 +57,10 @@ For installed packages, the following post-install artisan commands will run aut
 
 | Package                          | Команды                                                                                 |
 |----------------------------------|------------------------------------------------------------------------------------------|
-| `moonshine/moonshine`           | `php artisan moonshine:install`                                                         |
-| `filament/filament`             | `php artisan filament:install --panels`                                                 |
-| `darkaonline/l5-swagger`        | `php artisan install:api`                                                               |
+| `darkaonline/l5-swagger`        | `php artisan vendor:publish --provider="L5Swagger\L5SwaggerServiceProvider"`<br>`php artisan l5-swagger:generate` |
 | `defstudio/telegraph`           | `php artisan vendor:publish --tag="telegraph-migrations"`<br>`php artisan migrate`      |
 | `spatie/laravel-medialibrary`   | `php artisan vendor:publish --provider="Spatie\MediaLibrary\MediaLibraryServiceProvider" --tag="medialibrary-migrations"`<br>`php artisan migrate` |
-| `spatie/laravel-permission`     | `php artisan vendor:publish --provider="Spatie\Permission\PermissionServiceProvider"`<br>`php artisan opt:cle`<br>`php artisan migrate` |
+| `spatie/laravel-permission`     | `php artisan vendor:publish --provider="Spatie\Permission\PermissionServiceProvider"`<br>`php artisan optimize:clear`<br>`php artisan migrate` |
 
 ---
 
@@ -85,5 +79,3 @@ make test        # Run all tests via Pest
 
 - [API Responder Documentation](https://docs.pepperfm.com/api-responder-for-laravel)
 - [Spatie Laravel Data](https://github.com/spatie/laravel-data)
-- [Filament Docs](https://filamentphp.com)
-- [Moonshine Admin](https://moonshine-php.com)

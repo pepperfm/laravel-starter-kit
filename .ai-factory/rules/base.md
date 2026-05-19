@@ -15,7 +15,7 @@
 - Базовый Laravel skeleton сохраняет стандартные директории `app/`, `routes/`, `config/`, `database/`, `resources/`, `tests/`.
 - Новую доменную функциональность добавлять через module/application service boundaries, не раздувая controllers и setup-command.
 - `app/Console/Commands/SetupCommand.php` отвечает только за интерактивную установку starter kit опций.
-- Admin panel код Filament/Moonshine не считать целевым модулем: он временный и будет заменяться отдельным решением.
+- Admin panel код и пакеты Filament/Moonshine не считать целевым модулем: новая админка будет отдельным решением.
 
 ## Error Handling
 

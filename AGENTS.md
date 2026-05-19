@@ -4,7 +4,7 @@
 
 ## Project Overview
 
-Laravel starter kit для PepperFM с интерактивной setup-командой, Sail окружением и AI/dev quality tooling. Текущие Filament/Moonshine admin panel опции не входят в целевой контекст, потому что админская часть будет переделываться отдельно.
+Laravel starter kit для PepperFM с интерактивной setup-командой, Sail окружением и AI/dev quality tooling. Filament/Moonshine не входят в setup flow и целевой контекст, потому что админская часть будет проектироваться отдельно.
 
 ## Tech Stack
 
@@ -45,8 +45,8 @@ tests/                # Pest feature and architecture tests
 | `app/Console/Commands/SetupCommand.php` | Интерактивная настройка starter kit и установка опциональных пакетов |
 | `routes/web.php` | Web route definitions |
 | `app/Bootstrap/WithExceptions.php` | JSON error rendering для API-запросов |
-| `app/Bootstrap/WithMiddleware.php` | Текущий guest redirect; связан с legacy admin flow |
-| `app/Providers/AppServiceProvider.php` | Общие Laravel boot rules и текущие Filament customizations |
+| `app/Bootstrap/WithMiddleware.php` | Текущий guest redirect; будет уточняться вместе с новой admin area |
+| `app/Providers/AppServiceProvider.php` | Общие Laravel boot rules |
 | `docker-compose.yml` | Sail services: app, PostgreSQL, Redis |
 | `vite.config.js` | Vite/Laravel asset pipeline |
 | `tests/Feature/ArchTest.php` | Architecture expectations для PHP-кода |
