@@ -16,6 +16,7 @@
         "laramint/laravel-brain": "^2.2",
         "larastan/larastan": "^3.2",
         "laravel/boost": "^2.4",
+        "laravel/pao": "^1.0",
         "laravel/pint": "^1.13",
         "laravel/sail": "^1.26",
         "mockery/mockery": "^1.6",

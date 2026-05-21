@@ -13,6 +13,7 @@
 ## Module Structure
 
 - Базовый Laravel skeleton сохраняет стандартные директории `app/`, `routes/`, `config/`, `database/`, `resources/`, `tests/`.
+- Новые first-party/domain таблицы по умолчанию используют UUID primary keys; внешние ключи и morphs должны соответствовать UUID моделям.
 - Новую доменную функциональность добавлять через module/application service boundaries, не раздувая controllers и setup-command.
 - `app/Console/Commands/SetupCommand.php` отвечает только за интерактивную установку starter kit опций.
 - Optional admin frontend preset публикуется через setup installer, а не через ручную правку runtime-кода.
@@ -36,7 +37,7 @@
 - Использовать Pest для feature/architecture tests.
 - Новые публичные flows покрывать feature tests; чистые доменные правила покрывать unit tests, если они появятся.
 - Перед commit запускать Pint/Larastan/Pest через существующие project commands или Sail wrappers.
-- Учитывать dev tooling из зависимостей: Laravel Boost, Laravel Brain, PepperFM AI Guidelines, Pest Arch/mutation/profanity plugins.
+- Учитывать dev tooling из зависимостей: Laravel Boost, Laravel Brain, Laravel PAO, PepperFM AI Guidelines, Pest Arch/mutation/profanity plugins.
 
 ## Admin Panels
 

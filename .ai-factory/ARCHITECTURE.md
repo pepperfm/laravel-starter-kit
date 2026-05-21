@@ -9,7 +9,7 @@
 ## Decision Rationale
 
 - **Project type:** Laravel starter kit с интерактивной установкой опциональных компонентов.
-- **Tech stack:** PHP 8.4+, Laravel 13, Sail, PostgreSQL, Redis, Pest 4/Larastan/Pint.
+- **Tech stack:** PHP 8.4+, Laravel 13, Sail, PostgreSQL, Redis, Pest 4/Larastan/Pint, Laravel PAO.
 - **Key factor:** нужна структура для роста без преждевременного DDD/hexagonal формализма.
 - **Admin note:** Filament и Moonshine исключены из целевого контекста; новая admin area начинается с optional Inertia/Vue/Nuxt UI frontend foundation и должна расширяться отдельными модулями после уточнения требований.
 
@@ -75,6 +75,7 @@ tests/
 3. Admin area является отдельной delivery surface, а не центром доменной модели.
 4. Optional packages подключаются через явные adapters/configuration, чтобы starter kit оставался гибким.
 5. Tests и AI/dev tooling закрепляют архитектурные ожидания: strict types, отсутствие debug helpers, понятные boundaries, Larastan/Pint/Pest checks.
+6. First-party domain models default to UUID primary keys; related foreign keys and morph columns must preserve that type.
 
 ## Code Examples
 

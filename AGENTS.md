@@ -13,8 +13,8 @@ Laravel starter kit для PepperFM с интерактивной setup-кома
 - **Database:** PostgreSQL 17 через Sail
 - **Cache/queue:** Redis через Sail, стандартные Laravel config files
 - **Frontend:** Blade + Vite assets by default; optional Inertia 3 + Vue 3 + TypeScript + Nuxt UI 4 admin preset
-- **Tests:** Pest 4, Pest Laravel 4, Larastan, Pint
-- **AI/dev tooling:** Laravel Boost, Laravel Brain, PepperFM AI Guidelines
+- **Tests:** Pest 4, Pest Laravel 4, Larastan, Pint, Laravel PAO
+- **AI/dev tooling:** Laravel Boost, Laravel Brain, Laravel PAO, PepperFM AI Guidelines
 
 ## Project Structure
 
@@ -53,6 +53,7 @@ tests/                # Pest feature and architecture tests
 | `docker-compose.yml` | Sail services: app, PostgreSQL, Redis |
 | `vite.config.js` | Vite/Laravel asset pipeline |
 | `tests/Feature/ArchTest.php` | Architecture expectations для PHP-кода |
+| `tests/Feature/SetupCommandTest.php` | Проверка setup env normalization |
 
 ## Documentation
 

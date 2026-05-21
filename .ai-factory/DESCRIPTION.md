@@ -12,7 +12,7 @@
 - При установке через `laravel new --using=pepperfm/laravel-starter-kit` нужно передавать `--database=pgsql`, иначе Laravel Installer для custom starter kits выбирает SQLite после Composer scripts.
 - Laravel Sail окружение с PostgreSQL 17 и Redis.
 - Базовый web entry point через `routes/web.php` и `resources/views/welcome.blade.php`.
-- Подготовленные quality tools: Pest, Larastan, Pint, Laravel Boost, Laravel Brain и PepperFM AI Guidelines.
+- Подготовленные quality tools: Pest, Larastan, Pint, Laravel PAO, Laravel Boost, Laravel Brain и PepperFM AI Guidelines.
 - Опциональные интеграции через setup-команду: custom admin frontend foundation, Swagger/L5 Swagger, Spatie Laravel Data, API responder, Telegraph, MediaLibrary, Permissions, Ray.
 
 ## Исключения из целевого контекста
@@ -26,13 +26,14 @@
 
 - **Programming language:** PHP 8.4+
 - **Framework:** Laravel 13
+- **Primary keys:** базовая `App\Models\User` использует UUID primary key через `HasUuids`
 - **Frontend assets:** plain Blade/CSS/JS skeleton by default; optional admin preset publishes Inertia 3, Vue 3, TypeScript, Nuxt UI 4, Tailwind CSS 4, Ziggy, Vue I18n, VueUse and Valibot files
 - **Database:** PostgreSQL 17 в Sail, SQLite может использоваться стандартными Laravel сценариями
 - **Cache/queue support:** Redis в Sail, стандартные Laravel queue/cache конфиги
 - **Testing:** Pest 4 + Pest Laravel 4, Pest Arch, mutation/profanity plugins
 - **Static analysis:** Larastan 3
 - **Formatting:** Laravel Pint
-- **AI/dev tooling:** Laravel Boost, Laravel Brain, PepperFM AI Guidelines, Laravel MCP transitive package
+- **AI/dev tooling:** Laravel Boost, Laravel Brain, Laravel PAO, PepperFM AI Guidelines, Laravel MCP transitive package
 - **Debug tooling:** Fruitcake Laravel Debugbar, Spatie Ray
 - **Local environment:** Laravel Sail, Docker Compose
 

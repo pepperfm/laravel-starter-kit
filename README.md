@@ -19,8 +19,9 @@ setup flow — ready for production-focused application work from day one.
 - Ready-to-use Swagger API docs with [l5-swagger](https://github.com/DarkaOnLine/L5-Swagger)
 - Telegram bot integration via [defstudio/telegraph](https://github.com/defstudio/telegraph)
 - Local development environment powered by [Laravel Sail](https://laravel.com/docs/sail)
+- UUID primary keys for the base user model
 - Pre-configured with:
-    - Pest + Larastan for clean and safe testing
+    - Pest + Larastan + Laravel PAO for clean and agent-friendly testing
     - Laravel Debugbar, Ray, and Pint
 
 ## 📦 Installation
