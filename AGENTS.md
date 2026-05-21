@@ -44,7 +44,7 @@ tests/                # Pest feature and architecture tests
 | File | Purpose |
 | --- | --- |
 | `artisan` | Laravel CLI entry point |
-| `app/Console/Commands/SetupCommand.php` | Интерактивная настройка starter kit и установка опциональных пакетов |
+| `app/Console/Commands/SetupCommand.php` | Интерактивная настройка `.env`, host/Sail runtime и установка опциональных пакетов |
 | `app/Setup/AdminPanelFrontendInstaller.php` | Публикация optional Inertia/Vue/Nuxt UI admin frontend preset |
 | `routes/web.php` | Web route definitions |
 | `app/Bootstrap/WithExceptions.php` | JSON error rendering для API-запросов |

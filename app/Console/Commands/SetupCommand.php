@@ -12,6 +12,12 @@ use function Laravel\Prompts\{confirm, info, multiselect, note, select, text, wa
 
 final class SetupCommand extends Command
 {
+    private const COMMAND_RUNTIME_AUTO = 'auto';
+
+    private const COMMAND_RUNTIME_HOST = 'host';
+
+    private const COMMAND_RUNTIME_SAIL = 'sail';
+
     protected $signature = 'starter:setup {--no-post : Skip running post-install artisan commands}';
 
     protected $description = 'Interactive setup for the PepperFM Laravel starter kit.';
@@ -28,6 +34,8 @@ final class SetupCommand extends Command
 
     protected bool $adminFrontendRequested = false;
 
+    protected string $commandRuntime = self::COMMAND_RUNTIME_AUTO;
+
     protected ?bool $sailProxyAvailable = null;
 
     public function handle(AdminPanelFrontendInstaller $adminPanelFrontendInstaller): int
@@ -35,15 +43,24 @@ final class SetupCommand extends Command
         info('🔧 Laravel Starter Kit: Optional Setup');
 
         $this->configureEnvironment();
+        $this->askCommandRuntime();
 
         $this->askAdminFrontend();
         $this->askApiSupport();
         $this->askExtras();
 
+        if ($this->commandRuntime === self::COMMAND_RUNTIME_SAIL && !$this->prepareCommandRuntime()) {
+            return self::FAILURE;
+        }
+
         if ($this->installedPackages === [] && $this->installedDevPackages === []) {
             note('⚠️ No packages selected for installation.');
 
             return self::SUCCESS;
+        }
+
+        if (!$this->prepareCommandRuntime()) {
+            return self::FAILURE;
         }
 
         $packagesInstalled = $this->requirePackages($this->installedPackages, dev: false);
@@ -54,7 +71,6 @@ final class SetupCommand extends Command
 
             return self::FAILURE;
         }
-
         if ($this->adminFrontendRequested) {
             $adminFrontendInstalled = $adminPanelFrontendInstaller->install(
                 usingSail: $this->usingSail(),
@@ -67,7 +83,6 @@ final class SetupCommand extends Command
                 return self::FAILURE;
             }
         }
-
         if (!$this->option('no-post') && !$this->runSelectedPostInstallCommands()) {
             warning('⚠ Setup stopped because a post-install command failed.');
 
@@ -221,7 +236,7 @@ final class SetupCommand extends Command
                 ['migrate'],
             ],
             'spatie/laravel-ray' => [
-                $this->hasSailCommand() ? ['ray:publish-config', '--docker'] : ['ray:publish-config'],
+                $this->usingSail() ? ['ray:publish-config', '--docker'] : ['ray:publish-config'],
             ],
             'spatie/laravel-medialibrary' => [
                 ['vendor:publish', '--provider=Spatie\\MediaLibrary\\MediaLibraryServiceProvider', '--tag=medialibrary-migrations'],
@@ -294,24 +309,144 @@ final class SetupCommand extends Command
 
         $envContent = (string) file_get_contents($envPath);
 
+        $database = $this->envValue($envContent, 'DB_DATABASE', ['laravel', 'laravel_template']) ?? $this->defaultDatabaseName();
+        $databaseUsername = $this->envValue($envContent, 'DB_USERNAME', ['root', 'laravel_template']) ?? $database;
+        $databasePassword = $this->envValue($envContent, 'DB_PASSWORD', ['laravel_template']) ?? $database;
+
         $envContent = $this->replaceOrAppendEnv($envContent, 'WWWUSER', $uid);
         $envContent = $this->replaceOrAppendEnv($envContent, 'WWWGROUP', $gid);
+        $envContent = $this->replaceOrAppendEnv($envContent, 'DB_CONNECTION', 'pgsql');
+        $envContent = $this->replaceOrAppendEnv($envContent, 'DB_HOST', 'pgsql');
+        $envContent = $this->replaceOrAppendEnv($envContent, 'DB_PORT', '5432');
+        $envContent = $this->replaceOrAppendEnv($envContent, 'DB_DATABASE', $database);
+        $envContent = $this->replaceOrAppendEnv($envContent, 'DB_USERNAME', $databaseUsername);
+        $envContent = $this->replaceOrAppendEnv($envContent, 'DB_PASSWORD', $databasePassword);
 
         file_put_contents($envPath, $envContent);
 
-        info("🔐 Updated .env with WWWUSER=$uid and WWWGROUP=$gid");
+        info("🔐 Updated .env with WWWUSER=$uid, WWWGROUP=$gid and PostgreSQL credentials.");
+    }
+
+    protected function askCommandRuntime(): void
+    {
+        if ($this->runningInsideSail()) {
+            $this->commandRuntime = self::COMMAND_RUNTIME_HOST;
+
+            note('🐳 Running inside Sail; install commands will run directly in this container.');
+
+            return;
+        }
+
+        $this->commandRuntime = (string) select(
+            label: 'Where should setup run install commands?',
+            options: [
+                self::COMMAND_RUNTIME_HOST => 'Host machine',
+                self::COMMAND_RUNTIME_SAIL => 'Laravel Sail container',
+                self::COMMAND_RUNTIME_AUTO => 'Auto-detect running Sail',
+            ],
+            default: $this->sailAppContainerRunning() ? self::COMMAND_RUNTIME_SAIL : self::COMMAND_RUNTIME_HOST,
+            hint: 'Controls composer, artisan and frontend dependency commands.',
+        );
+
+        $this->sailProxyAvailable = null;
+    }
+
+    protected function prepareCommandRuntime(): bool
+    {
+        if ($this->commandRuntime !== self::COMMAND_RUNTIME_SAIL || $this->runningInsideSail()) {
+            return true;
+        }
+        if (!$this->hasSailCommand()) {
+            warning('⚠ Sail was selected, but the sail executable was not found.');
+
+            return false;
+        }
+        if ($this->sailAppContainerRunning()) {
+            return true;
+        }
+
+        $shouldStartSail = confirm(
+            label: 'Sail is not running. Start Sail containers now?',
+            hint: 'Required when setup commands should run through Sail.',
+        );
+
+        if (!$shouldStartSail) {
+            warning('⚠ Setup stopped because Sail was selected but is not running.');
+
+            return false;
+        }
+
+        $command = [$this->getSailCommand(), 'up', '-d', '--build'];
+
+        info('→ Running: ' . implode(' ', $command));
+
+        $process = Process::path(base_path())
+            ->timeout(1200)
+            ->run($command);
+
+        if (!$process->successful()) {
+            warning('⚠ Failed to start Sail containers.');
+            $this->output->write($process->errorOutput());
+
+            return false;
+        }
+
+        $this->output->write($process->output());
+        $this->sailProxyAvailable = null;
+
+        if ($this->sailAppContainerRunning()) {
+            return true;
+        }
+
+        warning('⚠ Sail containers were started, but the app service is not running.');
+
+        return false;
     }
 
     protected function replaceOrAppendEnv(string $content, string $key, string $value): string
     {
-        $pattern = '/^' . preg_quote($key, '/') . '=.*/m';
+        $pattern = '/^\s*#?\s*' . preg_quote($key, '/') . '=.*/m';
         if (preg_match($pattern, $content) === 1) {
-            return preg_replace($pattern, "$key=$value", $content);
+            return (string) preg_replace($pattern, "$key=$value", $content);
         }
 
         $content = rtrim($content) . PHP_EOL;
 
         return $content . "$key=$value" . PHP_EOL;
+    }
+
+    /**
+     * @param array<int, string> $placeholderValues
+     * @param string $content
+     * @param string $key
+     */
+    protected function envValue(string $content, string $key, array $placeholderValues = []): ?string
+    {
+        $pattern = '/^\s*#?\s*' . preg_quote($key, '/') . '=(.*)$/m';
+
+        if (preg_match($pattern, $content, $matches) !== 1) {
+            return null;
+        }
+
+        $value = trim($matches[1]);
+        $value = trim($value, "\"'");
+        if ($value === '' || strtolower($value) === 'null') {
+            return null;
+        }
+
+        if (in_array(strtolower($value), array_map('strtolower', $placeholderValues), true)) {
+            return null;
+        }
+
+        return $value;
+    }
+
+    protected function defaultDatabaseName(): string
+    {
+        $name = basename(base_path());
+        $name = preg_replace('/\W/', '_', $name) ?: 'laravel';
+
+        return strtolower(trim($name, '_')) ?: 'laravel';
     }
 
     protected function packageName(string $packageSpec): string
@@ -326,9 +461,23 @@ final class SetupCommand extends Command
         if ($this->sailProxyAvailable !== null) {
             return $this->sailProxyAvailable;
         }
-
         if ($this->runningInsideSail() || !$this->hasSailCommand()) {
             return $this->sailProxyAvailable = false;
+        }
+        if ($this->commandRuntime === self::COMMAND_RUNTIME_HOST) {
+            return $this->sailProxyAvailable = false;
+        }
+        if ($this->commandRuntime === self::COMMAND_RUNTIME_SAIL) {
+            return $this->sailProxyAvailable = $this->sailAppContainerRunning();
+        }
+
+        return $this->sailProxyAvailable = $this->sailAppContainerRunning();
+    }
+
+    protected function sailAppContainerRunning(): bool
+    {
+        if (!$this->hasSailCommand()) {
+            return false;
         }
 
         $process = Process::path(base_path())
@@ -336,12 +485,12 @@ final class SetupCommand extends Command
             ->run(['docker', 'compose', 'ps', '--services', '--filter', 'status=running']);
 
         if (!$process->successful()) {
-            return $this->sailProxyAvailable = false;
+            return false;
         }
 
         $runningServices = array_filter(array_map('trim', explode(PHP_EOL, $process->output())));
 
-        return $this->sailProxyAvailable = in_array('app', $runningServices, true);
+        return in_array('app', $runningServices, true);
     }
 
     protected function getSailCommand(): string

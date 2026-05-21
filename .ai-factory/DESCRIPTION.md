@@ -8,7 +8,8 @@
 
 ## Core Features
 
-- Интерактивная команда `php artisan starter:setup` для настройки `.env`, выбора optional admin frontend preset, API-поддержки и дополнительных пакетов.
+- Интерактивная команда `php artisan starter:setup` для настройки `.env`, выбора host/Sail runtime, optional admin frontend preset, API-поддержки и дополнительных пакетов.
+- При установке через `laravel new --using=pepperfm/laravel-starter-kit` нужно передавать `--database=pgsql`, иначе Laravel Installer для custom starter kits выбирает SQLite после Composer scripts.
 - Laravel Sail окружение с PostgreSQL 17 и Redis.
 - Базовый web entry point через `routes/web.php` и `resources/views/welcome.blade.php`.
 - Подготовленные quality tools: Pest, Larastan, Pint, Laravel Boost, Laravel Brain и PepperFM AI Guidelines.
@@ -37,7 +38,7 @@
 
 ## Текущая структура
 
-- `app/Console/Commands/SetupCommand.php` содержит интерактивную установку опциональных пакетов и optional admin frontend preset.
+- `app/Console/Commands/SetupCommand.php` содержит интерактивную настройку `.env`, выбор host/Sail runtime, установку опциональных пакетов и optional admin frontend preset.
 - `app/Setup/AdminPanelFrontendInstaller.php` публикует admin frontend stubs и выбирает host/Sail команду установки frontend dependencies.
 - `app/Bootstrap/WithExceptions.php` централизует JSON error responses для API-запросов.
 - `app/Bootstrap/WithMiddleware.php` перенаправляет гостей на `/panel`.

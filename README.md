@@ -26,28 +26,30 @@ setup flow — ready for production-focused application work from day one.
 ## 📦 Installation
 
 ```bash
-laravel new example-app --using=pepperfm/laravel-starter-kit
+laravel new example-app --using=pepperfm/laravel-starter-kit --database=pgsql
 ```
+The `--database=pgsql` flag is important: Laravel Installer defaults custom starter kits to SQLite when no database driver is specified.
+When using Sail, choose the Sail runtime during setup so containers are available for Laravel Installer's final migration step.
+
 After creating your project, the interactive starter:setup command will run automatically, helping you choose:
+- Whether setup commands should run on the host machine, through Sail, or auto-detect a running Sail container
 - Whether to publish the custom admin frontend foundation
 - API support packages and Swagger docs
 - Optional features like Telegram bot integration, Ray debugger, Media Library, and Permissions
 
-You will also be prompted to configure environment variables `WWWUSER` and `WWWGROUP` for proper permissions.
+You will also be prompted to configure environment variables `WWWUSER` and `WWWGROUP` for proper permissions. The setup command also normalizes the PostgreSQL `DB_*` variables so they are active after `laravel new`.
 
-✅ If you agree to automatic build and launch with Sail, the setup will:
-- Install selected composer packages
-- Publish selected frontend preset files and install frontend dependencies
-- Build and start Sail containers
-- Generate an app key and run post-install artisan commands specific to installed packages
+If you choose Sail and the app container is not running yet, setup can start Sail with `./sail up -d --build` before installing selected packages.
 
-❌ If you decline, run them manually:
+During setup, the selected command runtime controls:
+- Installing selected composer packages
+- Publishing selected frontend preset files and installing frontend dependencies
+- Running post-install artisan commands specific to installed packages
+
+If you skip Sail during setup, you can start it later:
 ```bash
 chmod 755 ./sail
 ./sail up -d --build
-./sail composer install
-./sail artisan key:gen
-./sail artisan sto:li
 ```
 
 ## ⚙️ Setup Command
@@ -59,7 +61,7 @@ php artisan starter:setup
 Interactive setup will help you customize your project features and install optional packages with their post-install steps.
 
 ## 🛠 Post-Install Commands
-For installed packages, the following post-install artisan commands will run automatically (if you use auto-build):
+For installed packages, the following post-install artisan commands will run automatically unless `--no-post` is used:
 
 | Package                          | Команды                                                                                 |
 |----------------------------------|------------------------------------------------------------------------------------------|
