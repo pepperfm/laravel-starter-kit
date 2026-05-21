@@ -5,22 +5,20 @@
     "keywords": ["laravel", "framework", "starter"],
     "license": "MIT",
     "require": {
-        "php": "^8.3",
-        "laravel/framework": "^12.0",
+        "php": "^8.4",
+        "laravel/framework": "^13.0",
         "laravel/prompts": "^0.3.5",
-        "laravel/tinker": "^2.10.1"
+        "laravel/tinker": "^3.0"
     },
     "require-dev": {
-        "brainmaestro/composer-git-hooks": "^3.0",
-        "barryvdh/laravel-debugbar": "^3.14",
         "fakerphp/faker": "^1.23",
         "larastan/larastan": "^3.2",
         "laravel/pint": "^1.13",
         "laravel/sail": "^1.26",
         "mockery/mockery": "^1.6",
         "nunomaduro/collision": "^8.6",
-        "pestphp/pest": "^3.7",
-        "pestphp/pest-plugin-laravel": "^3.1"
+        "pestphp/pest": "^4.0",
+        "pestphp/pest-plugin-laravel": "^4.0"
     },
     "autoload": {
         "files": [
@@ -38,14 +36,20 @@
         }
     },
     "scripts": {
-        "cghooks": "./vendor/bin/cghooks",
-        "post-install-cmd": "cghooks add --ignore-lock",
+        "dev": [
+            "Composer\\Config::disableProcessTimeout",
+            "bunx concurrently -c \"#93c5fd,#c4b5fd,#fb7185,#fdba74\" \"php artisan queue:listen --tries=1 --timeout=0\" \"php artisan pail --timeout=0\" \"bun run dev\" --names=server,queue,logs,vite"
+        ],
+        "dev:ssr": [
+            "npm run build:ssr",
+            "Composer\\Config::disableProcessTimeout",
+            "bunx concurrently -c \"#93c5fd,#c4b5fd,#fb7185,#fdba74\" \"php artisan serve\" \"php artisan queue:listen --tries=1 --timeout=0\" \"php artisan pail --timeout=0\" \"php artisan inertia:start-ssr\" --names=server,queue,logs,ssr --kill-others"
+        ],
         "post-autoload-dump": [
             "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
             "@php artisan package:discover --ansi"
         ],
         "post-update-cmd": [
-            "cghooks update",
             "@php artisan vendor:publish --tag=laravel-assets --ansi --force"
         ],
         "post-root-package-install": [
@@ -58,15 +62,6 @@
         ]
     },
     "extra": {
-        "hooks": {
-            "pre-commit": [
-                "echo committing as $(git config user.name)",
-                "./vendor/bin/sail pint -v --test"
-            ],
-            "pre-push": [
-                "./vendor/bin/sail test"
-            ]
-        },
         "laravel": {
             "dont-discover": []
         }
