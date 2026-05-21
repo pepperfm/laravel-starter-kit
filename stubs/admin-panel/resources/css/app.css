@@ -1,0 +1,13 @@
+@import 'tailwindcss' source('../..');
+@import '@nuxt/ui';
+@source "../views";
+
+:root {
+  --ui-radius: 0.375rem;
+}
+
+@layer base {
+  body {
+    @apply bg-default text-default antialiased;
+  }
+}

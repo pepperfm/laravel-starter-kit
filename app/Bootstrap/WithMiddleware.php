@@ -10,6 +10,6 @@ class WithMiddleware
 {
     public function __invoke(Middleware $middleware): void
     {
-        $middleware->redirectGuestsTo('/admin');
+        $middleware->redirectGuestsTo('/panel');
     }
 }

@@ -4,155 +4,133 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Setup\AdminPanelFrontendInstaller;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Process;
 
-use function Laravel\Prompts\{info, select, multiselect, note, warning, error, confirm, text};
+use function Laravel\Prompts\{confirm, info, multiselect, note, select, text, warning};
 
-/*
- * Class SetupCommand
- *
- * Interactive setup command for installing optional packages
- * like API support, Telegram bot integration, and Ray debugger.
- */
-
-class SetupCommand extends Command
+final class SetupCommand extends Command
 {
-    protected $signature = 'starter:setup';
+    protected $signature = 'starter:setup {--no-post : Skip running post-install artisan commands}';
 
-    protected $description = 'Interactive starter kit setup (optional packages + optional Sail bootstrapping).';
-
-    /**
-     * Composer "require" arguments (production deps).
-     *
-     * @var array<int, string>
-     */
-    protected array $packages = [];
+    protected $description = 'Interactive setup for the PepperFM Laravel starter kit.';
 
     /**
-     * Composer "require --dev" arguments (dev deps).
-     *
      * @var array<int, string>
      */
-    protected array $devPackages = [];
+    protected array $installedPackages = [];
 
-    protected bool $wantsSail = false;
+    /**
+     * @var array<int, string>
+     */
+    protected array $installedDevPackages = [];
 
-    protected bool $startedSail = false;
+    protected bool $adminFrontendRequested = false;
 
-    public function handle(): int
+    protected ?bool $sailProxyAvailable = null;
+
+    public function handle(AdminPanelFrontendInstaller $adminPanelFrontendInstaller): int
     {
         info('🔧 Laravel Starter Kit: Optional Setup');
 
-        $this->wantsSail = confirm(
-            label: 'Are you going to use Laravel Sail for this project?',
-        );
+        $this->configureEnvironment();
 
-        if ($this->wantsSail) {
-            $this->configureEnvironment();
+        $this->askAdminFrontend();
+        $this->askApiSupport();
+        $this->askExtras();
 
-            $this->startedSail = confirm(
-                label: 'Would you like to automatically build and start Sail containers now?',
-                default: false,
+        if ($this->installedPackages === [] && $this->installedDevPackages === []) {
+            note('⚠️ No packages selected for installation.');
+
+            return self::SUCCESS;
+        }
+
+        $packagesInstalled = $this->requirePackages($this->installedPackages, dev: false);
+        $devPackagesInstalled = $this->requirePackages($this->installedDevPackages, dev: true);
+
+        if (!$packagesInstalled || !$devPackagesInstalled) {
+            warning('⚠ Setup stopped because package installation failed.');
+
+            return self::FAILURE;
+        }
+
+        if ($this->adminFrontendRequested) {
+            $adminFrontendInstalled = $adminPanelFrontendInstaller->install(
+                usingSail: $this->usingSail(),
+                sailCommand: $this->getSailCommand(),
             );
 
-            if ($this->startedSail) {
-                $this->runSailUp();
-            } else {
-                note('⚠️ Sail auto-build skipped.');
+            if (!$adminFrontendInstalled) {
+                warning('⚠ Setup stopped because admin frontend installation failed.');
+
+                return self::FAILURE;
             }
         }
 
-        $this->selectAdminPanel();
-        $this->selectApiStack();
-        $this->selectExtras();
+        if (!$this->option('no-post') && !$this->runSelectedPostInstallCommands()) {
+            warning('⚠ Setup stopped because a post-install command failed.');
 
-        if (empty($this->packages) && empty($this->devPackages)) {
-            note('⚠️ No packages selected for installation.');
-            note('✅ Setup complete.');
-
-            return static::SUCCESS;
+            return self::FAILURE;
         }
 
-        note('📦 Installing selected packages…');
+        note('✅ Setup complete.');
 
-        if (!$this->composerRequire($this->packages, dev: false)) {
-            return static::FAILURE;
-        }
-
-        if (!$this->composerRequire($this->devPackages, dev: true)) {
-            return static::FAILURE;
-        }
-
-        foreach (array_merge($this->packages, $this->devPackages) as $packageArg) {
-            $this->runPostInstallCommands($this->normalizePackageName($packageArg));
-        }
-
-        $this->maybeCreateFilamentUser();
-
-        note('✅ Setup complete. Don’t forget to configure services and commit your changes.');
-
-        return static::SUCCESS;
+        return self::SUCCESS;
     }
 
-    protected function selectAdminPanel(): void
+    protected function askAdminFrontend(): void
     {
-        $adminNeeded = confirm(
-            label: 'Will this app use an admin panel?',
-            default: true,
+        $this->adminFrontendRequested = confirm(
+            label: 'Install custom admin frontend foundation?',
+            default: false,
+            hint: 'Publishes the Inertia + Vue + Nuxt UI panel preset.',
         );
 
-        if (!$adminNeeded) {
-            note('⚠️ Skipping admin panel installation.');
+        if (!$this->adminFrontendRequested) {
+            note('⚠️ Skipping admin frontend foundation.');
+
             return;
         }
 
-        $adminChoice = select(
-            label: 'Which admin panel would you like to install?',
-            options: [
-                'filament/filament:^4.0' => '✨ Filament v4 — Panel builder + components (Livewire)',
-                'moonshine/moonshine' => '🌙 Moonshine — admin panel for Laravel',
-            ],
-            default: 'filament/filament:^4.0',
-        );
-
-        $this->packages[] = $adminChoice;
+        $this->installedPackages[] = 'inertiajs/inertia-laravel:^3.0';
+        $this->installedPackages[] = 'tightenco/ziggy:^2.5';
     }
 
-    protected function selectApiStack(): void
+    protected function askApiSupport(): void
     {
-        $apiNeeded = confirm(
-            label: 'Will this app be used as an API?',
-            default: false,
-        );
+        $apiNeeded = confirm('Will this app be used as an API?', default: false);
 
         if (!$apiNeeded) {
             note('⚠️ Skipping API support installation.');
+
             return;
         }
 
-        info('API setup will install Swagger (L5-Swagger) automatically.');
-        $this->packages[] = 'darkaonline/l5-swagger';
+        info('API support: installing Swagger UI (L5 Swagger) for documentation.');
+
+        $this->installedPackages[] = 'darkaonline/l5-swagger';
 
         $apiChoice = select(
-            label: 'Which DTO / response toolkit would you like to install?',
+            label: 'Which additional API helper package would you like to install?',
             options: [
-                'spatie/laravel-data' => '📦 Spatie Laravel Data — rich DTOs',
-                'pepperfm/api-responder-for-laravel' => '📦 API Responder — lightweight DTOs + response helpers',
+                'spatie/laravel-data' => '📦 Laravel Data — data objects / DTOs',
+                'pepperfm/api-responder-for-laravel' => '📦 API Responder — lightweight response helpers',
             ],
             default: 'spatie/laravel-data',
         );
 
-        $this->packages[] = $apiChoice;
+        $this->installedPackages[] = (string) $apiChoice;
     }
 
-    protected function selectExtras(): void
+    protected function askExtras(): void
     {
+        /** @var array<int, string> $otherChoices */
         $otherChoices = multiselect(
             label: 'Select additional features to install',
             options: [
-                'defstudio/telegraph' => '🤖 Telegram Bot Integration',
-                'spatie/laravel-ray' => '🛠 Ray Debugger (requires license)',
+                'defstudio/telegraph' => '🤖 Telegram Bot Integration (Telegraph)',
+                'spatie/laravel-ray' => '🛠 Ray Debugger (requires license) [dev]',
                 'spatie/laravel-medialibrary' => '🖼  Spatie MediaLibrary (file uploads)',
                 'spatie/laravel-permission' => '🔐 Spatie Permissions (roles & permissions)',
             ],
@@ -160,30 +138,36 @@ class SetupCommand extends Command
 
         foreach ($otherChoices as $selected) {
             if ($selected === 'spatie/laravel-ray') {
-                $this->devPackages[] = $selected;
+                $this->installedDevPackages[] = $selected;
+
                 continue;
             }
 
-            $this->packages[] = $selected;
+            $this->installedPackages[] = $selected;
         }
     }
 
     /**
-     * Run `composer require` for specified packages.
+     * Run composer require for specified packages.
      *
      * @param array<int, string> $packages
+     * @param bool $dev
      */
-    protected function composerRequire(array $packages, bool $dev): bool
+    protected function requirePackages(array $packages, bool $dev): bool
     {
-        if (empty($packages)) {
+        $packages = array_values(array_unique(array_filter(array_map('trim', $packages))));
+        if ($packages === []) {
             return true;
         }
 
-        $command = [
-            'composer',
-            'require',
-            '--no-interaction',
-        ];
+        $isSail = $this->usingSail();
+
+        $command = $isSail
+            ? [$this->getSailCommand(), 'composer', 'require']
+            : ['composer', 'require'];
+
+        // Important: allow updating locked transitive dependencies (helps when upgrading major versions).
+        $command[] = '--with-all-dependencies';
 
         if ($dev) {
             $command[] = '--dev';
@@ -193,14 +177,13 @@ class SetupCommand extends Command
 
         info('→ Running: ' . implode(' ', $command));
 
-        $process = Process::timeout(600)->path(base_path())->run(
-            $command,
-            function (string $type, string $output): void {
-                $this->output->write($output);
-            }
-        );
+        $process = Process::path(base_path())
+            ->timeout(600)
+            ->run($command);
 
         if ($process->successful()) {
+            $this->output->write($process->output());
+
             return true;
         }
 
@@ -210,14 +193,80 @@ class SetupCommand extends Command
         return false;
     }
 
-    protected function normalizePackageName(string $composerArg): string
+    protected function runSelectedPostInstallCommands(): bool
     {
-        return explode(':', $composerArg, 2)[0];
+        $all = array_merge($this->installedPackages, $this->installedDevPackages);
+        $successful = true;
+
+        foreach ($all as $packageSpec) {
+            $package = $this->packageName($packageSpec);
+            $successful = $this->runPostInstallCommands($package) && $successful;
+        }
+
+        return $successful;
     }
 
     /*
-     * Configure .env file for WWWUSER and WWWGROUP variables.
+     * Run package-specific post-install artisan commands.
      */
+    protected function runPostInstallCommands(string $package): bool
+    {
+        $commands = [
+            'darkaonline/l5-swagger' => [
+                ['vendor:publish', '--provider=L5Swagger\\L5SwaggerServiceProvider'],
+                ['l5-swagger:generate'],
+            ],
+            'defstudio/telegraph' => [
+                ['vendor:publish', '--tag=telegraph-migrations'],
+                ['migrate'],
+            ],
+            'spatie/laravel-ray' => [
+                $this->hasSailCommand() ? ['ray:publish-config', '--docker'] : ['ray:publish-config'],
+            ],
+            'spatie/laravel-medialibrary' => [
+                ['vendor:publish', '--provider=Spatie\\MediaLibrary\\MediaLibraryServiceProvider', '--tag=medialibrary-migrations'],
+                ['migrate'],
+            ],
+            'spatie/laravel-permission' => [
+                ['vendor:publish', '--provider=Spatie\\Permission\\PermissionServiceProvider'],
+                ['optimize:clear'],
+                ['migrate'],
+            ],
+        ];
+
+        if (!isset($commands[$package])) {
+            return true;
+        }
+
+        $successful = true;
+
+        foreach ($commands[$package] as $cmd) {
+            $isSail = $this->usingSail();
+
+            $command = $isSail
+                ? array_merge([$this->getSailCommand(), 'php', 'artisan'], $cmd)
+                : array_merge(['php', 'artisan'], $cmd);
+
+            info("→ Running post-install command for $package: " . implode(' ', $command));
+
+            $process = Process::path(base_path())
+                ->timeout(600)
+                ->run($command);
+
+            if ($process->successful()) {
+                $this->output->write($process->output());
+
+                continue;
+            }
+
+            warning("⚠ Post-install command failed for $package: " . implode(' ', $command));
+            $this->output->write($process->errorOutput());
+            $successful = false;
+        }
+
+        return $successful;
+    }
+
     protected function configureEnvironment(): void
     {
         $envPath = base_path('.env');
@@ -225,242 +274,94 @@ class SetupCommand extends Command
 
         if (!file_exists($envPath) && file_exists($envExamplePath)) {
             copy($envExamplePath, $envPath);
-            info('📄 .env file created from .env.example');
         }
 
         if (!file_exists($envPath)) {
-            warning('⚠️ .env file not found. Skipping Sail environment configuration.');
+            warning('⚠️ .env file not found, skipping environment configuration.');
+
             return;
         }
 
         $autoDetect = confirm(
-            label: 'Do you want to auto-detect your UID and GID for WWWUSER/WWWGROUP?',
+            label: 'Auto-detect your UID and GID for WWWUSER/WWWGROUP?',
         );
 
-        $defaultUid = function_exists('getmyuid') ? (string) getmyuid() : '1000';
-        $defaultGid = function_exists('getmygid') ? (string) getmygid() : '1000';
+        $uidDefault = function_exists('getmyuid') ? (string) getmyuid() : '1000';
+        $gidDefault = function_exists('getmygid') ? (string) getmygid() : '1000';
 
-        $uid = $autoDetect ? (int) $defaultUid : (int) text('Enter your user ID (UID)', default: $defaultUid);
-        $gid = $autoDetect ? (int) $defaultGid : (int) text('Enter your group ID (GID)', default: $defaultGid);
+        $uid = $autoDetect ? $uidDefault : text('Enter your user ID (UID)', default: $uidDefault);
+        $gid = $autoDetect ? $gidDefault : text('Enter your group ID (GID)', default: $gidDefault);
 
-        $envContent = file_get_contents($envPath) ?: '';
+        $envContent = (string) file_get_contents($envPath);
 
-        $envContent = $this->replaceOrAppendEnvValue($envContent, key: 'WWWUSER', value: (string) $uid);
-        $envContent = $this->replaceOrAppendEnvValue($envContent, key: 'WWWGROUP', value: (string) $gid);
+        $envContent = $this->replaceOrAppendEnv($envContent, 'WWWUSER', $uid);
+        $envContent = $this->replaceOrAppendEnv($envContent, 'WWWGROUP', $gid);
 
         file_put_contents($envPath, $envContent);
 
         info("🔐 Updated .env with WWWUSER=$uid and WWWGROUP=$gid");
     }
 
-    protected function replaceOrAppendEnvValue(string $content, string $key, string $value): string
+    protected function replaceOrAppendEnv(string $content, string $key, string $value): string
     {
         $pattern = '/^' . preg_quote($key, '/') . '=.*/m';
-
         if (preg_match($pattern, $content) === 1) {
-            return (string) preg_replace($pattern, $key . '=' . $value, $content);
+            return preg_replace($pattern, "$key=$value", $content);
         }
 
-        return rtrim($content) . PHP_EOL . $key . '=' . $value . PHP_EOL;
+        $content = rtrim($content) . PHP_EOL;
+
+        return $content . "$key=$value" . PHP_EOL;
     }
 
-    /*
-     * Start Sail containers (best-effort).
-     */
-    protected function runSailUp(): void
+    protected function packageName(string $packageSpec): string
     {
-        $sail = $this->getSailCommand();
-        if ($sail === null) {
-            warning('⚠️ Sail command not found (expected ./sail or ./vendor/bin/sail).');
+        $parts = explode(':', $packageSpec, 2);
 
-            return;
-        }
-
-        if (!file_exists(base_path('docker-compose.yml'))) {
-            warning('⚠️ docker-compose.yml not found. Did you run `php artisan sail:install`? Skipping Sail boot.');
-
-            return;
-        }
-
-        if ($sail === './sail' && file_exists(base_path('sail')) && !is_executable(base_path('sail'))) {
-            Process::path(base_path())->run(['chmod', '755', 'sail']);
-        }
-
-        $commands = [
-            [$sail, 'up', '-d', '--build'],
-            [$sail, 'artisan', 'storage:link'],
-        ];
-
-        foreach ($commands as $command) {
-            info('→ Running: ' . implode(' ', $command));
-
-            $process = Process::timeout(600)->path(base_path())->run(
-                $command,
-                function (string $type, string $output): void {
-                    $this->output->write($output);
-                }
-            );
-
-            if (!$process->successful()) {
-                warning('⚠ Command failed: ' . implode(' ', $command));
-                $this->output->write($process->errorOutput());
-
-                return;
-            }
-        }
+        return trim($parts[0]);
     }
 
-    /*
-     * Get the correct Sail executable command.
-     */
-    protected function getSailCommand(): ?string
+    protected function usingSail(): bool
+    {
+        if ($this->sailProxyAvailable !== null) {
+            return $this->sailProxyAvailable;
+        }
+
+        if ($this->runningInsideSail() || !$this->hasSailCommand()) {
+            return $this->sailProxyAvailable = false;
+        }
+
+        $process = Process::path(base_path())
+            ->timeout(10)
+            ->run(['docker', 'compose', 'ps', '--services', '--filter', 'status=running']);
+
+        if (!$process->successful()) {
+            return $this->sailProxyAvailable = false;
+        }
+
+        $runningServices = array_filter(array_map('trim', explode(PHP_EOL, $process->output())));
+
+        return $this->sailProxyAvailable = in_array('app', $runningServices, true);
+    }
+
+    protected function getSailCommand(): string
     {
         if (is_executable(base_path('sail'))) {
             return './sail';
         }
 
-        if (is_executable(base_path('vendor/bin/sail'))) {
-            return './vendor/bin/sail';
-        }
-
-        return null;
+        return './vendor/bin/sail';
     }
 
-    /*
-     * Run package-specific post-install Artisan commands.
-     */
-    protected function runPostInstallCommands(string $package): void
+    protected function hasSailCommand(): bool
     {
-        match ($package) {
-            'moonshine/moonshine' => $this->callChecked('moonshine:install'),
-            'filament/filament' => $this->callChecked('filament:install', ['--panels' => true]),
-            'darkaonline/l5-swagger' => $this->installSwagger(),
-            'defstudio/telegraph' => $this->installTelegraph(),
-            'spatie/laravel-ray' => $this->installRay(),
-            'spatie/laravel-medialibrary' => $this->installMediaLibrary(),
-            'spatie/laravel-permission' => $this->installPermission(),
-            default => null,
-        };
+        return is_executable(base_path('sail')) || is_executable(base_path('vendor/bin/sail'));
     }
 
-    protected function installSwagger(): void
+    protected function runningInsideSail(): bool
     {
-        $this->callChecked('install:api');
+        $value = $_ENV['LARAVEL_SAIL'] ?? getenv('LARAVEL_SAIL');
 
-        // Publish config so `config/l5-swagger.php` exists.
-        $this->callChecked('vendor:publish', [
-            '--provider' => 'L5Swagger\\L5SwaggerServiceProvider',
-        ]);
-    }
-
-    protected function installTelegraph(): void
-    {
-        $this->callChecked('vendor:publish', ['--tag' => 'telegraph-migrations']);
-        $this->callChecked('migrate');
-    }
-
-    protected function installRay(): void
-    {
-        $options = $this->wantsSail ? ['--docker' => true] : [];
-        $this->callChecked('ray:publish-config', $options);
-    }
-
-    protected function installMediaLibrary(): void
-    {
-        $this->callChecked('vendor:publish', [
-            '--provider' => 'Spatie\\MediaLibrary\\MediaLibraryServiceProvider',
-            '--tag' => 'medialibrary-migrations',
-        ]);
-        $this->callChecked('migrate');
-    }
-
-    protected function installPermission(): void
-    {
-        $this->callChecked('vendor:publish', [
-            '--provider' => 'Spatie\\Permission\\PermissionServiceProvider',
-        ]);
-        $this->callChecked('optimize:clear');
-        $this->callChecked('migrate');
-    }
-
-    /**
-     * Run an Artisan command and report failures.
-     *
-     * @param array<string, mixed> $options
-     */
-    protected function callChecked(string $command, array $options = []): void
-    {
-        info('→ Running: php artisan ' . $command);
-
-        $exitCode = $this->call($command, $options);
-
-        if ($exitCode !== static::SUCCESS) {
-            error('❌ Command failed: ' . $command);
-        }
-    }
-
-    protected function maybeCreateFilamentUser(): void
-    {
-        if (!$this->wasPackageSelected('filament/filament')) {
-            return;
-        }
-
-        $createUser = confirm(
-            label: 'Would you like to run migrations and create a Filament user now?',
-        );
-
-        if (!$createUser) {
-            note('ℹ️ Skipping Filament user creation. You can run `php artisan make:filament-user` later.');
-
-            return;
-        }
-
-        $this->callChecked('migrate');
-        $this->callChecked('make:filament-user');
-
-        $this->ensureFilamentPanelProviderRegistered();
-    }
-
-    protected function ensureFilamentPanelProviderRegistered(): void
-    {
-        $providersPath = base_path('bootstrap/providers.php');
-        if (!file_exists($providersPath)) {
-            return;
-        }
-
-        $providerClass = 'App\\Providers\\Filament\\AdminPanelProvider::class';
-
-        $contents = file_get_contents($providersPath) ?: '';
-
-        if (str_contains($contents, $providerClass)) {
-            return;
-        }
-
-        // Best-effort: add before the closing array bracket.
-        $updated = preg_replace(
-            '/\n];\s*$/',
-            "\n    {$providerClass},\n];\n",
-            $contents,
-        );
-
-        if (!is_string($updated) || $updated === $contents) {
-            return;
-        }
-
-        file_put_contents($providersPath, $updated);
-        info('🧩 Registered Filament AdminPanelProvider in bootstrap/providers.php');
-    }
-
-    protected function wasPackageSelected(string $package): bool
-    {
-        $all = array_merge($this->packages, $this->devPackages);
-
-        foreach ($all as $arg) {
-            if ($this->normalizePackageName($arg) === $package) {
-                return true;
-            }
-        }
-
-        return false;
+        return filter_var($value, FILTER_VALIDATE_BOOL);
     }
 }
