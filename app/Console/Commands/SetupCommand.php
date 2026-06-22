@@ -122,9 +122,10 @@ final class SetupCommand extends Command
             return;
         }
 
-        info('API support: installing Swagger UI (L5 Swagger) for documentation.');
+        info('API support: installing Sanctum and Swagger Nuxt UI documentation.');
 
-        $this->installedPackages[] = 'darkaonline/l5-swagger';
+        $this->installedPackages[] = 'laravel/sanctum';
+        $this->installedPackages[] = 'pepperfm/swagger-nuxt-ui-for-laravel';
 
         $apiChoice = select(
             label: 'Which additional API helper package would you like to install?',
@@ -226,36 +227,15 @@ final class SetupCommand extends Command
      */
     protected function runPostInstallCommands(string $package): bool
     {
-        $commands = [
-            'darkaonline/l5-swagger' => [
-                ['vendor:publish', '--provider=L5Swagger\\L5SwaggerServiceProvider'],
-                ['l5-swagger:generate'],
-            ],
-            'defstudio/telegraph' => [
-                ['vendor:publish', '--tag=telegraph-migrations'],
-                ['migrate'],
-            ],
-            'spatie/laravel-ray' => [
-                $this->usingSail() ? ['ray:publish-config', '--docker'] : ['ray:publish-config'],
-            ],
-            'spatie/laravel-medialibrary' => [
-                ['vendor:publish', '--provider=Spatie\\MediaLibrary\\MediaLibraryServiceProvider', '--tag=medialibrary-migrations'],
-                ['migrate'],
-            ],
-            'spatie/laravel-permission' => [
-                ['vendor:publish', '--provider=Spatie\\Permission\\PermissionServiceProvider'],
-                ['optimize:clear'],
-                ['migrate'],
-            ],
-        ];
+        $commands = $this->postInstallCommandsForPackage($package);
 
-        if (!isset($commands[$package])) {
+        if ($commands === []) {
             return true;
         }
 
         $successful = true;
 
-        foreach ($commands[$package] as $cmd) {
+        foreach ($commands as $cmd) {
             $isSail = $this->usingSail();
 
             $command = $isSail
@@ -279,7 +259,128 @@ final class SetupCommand extends Command
             $successful = false;
         }
 
+        if ($package === 'laravel/sanctum' && $successful) {
+            return $this->ensureApiRoutesRegistered() && $this->ensureUserModelUsesSanctumTokens();
+        }
+
         return $successful;
+    }
+
+    /**
+     * @param string $package
+     *
+     * @return array<int, array<int, string>>
+     */
+    protected function postInstallCommandsForPackage(string $package): array
+    {
+        $commands = [
+            'laravel/sanctum' => [
+                ['install:api', '--without-migration-prompt'],
+            ],
+            'defstudio/telegraph' => [
+                ['vendor:publish', '--tag=telegraph-migrations'],
+                ['migrate'],
+            ],
+            'spatie/laravel-ray' => [
+                $this->usingSail() ? ['ray:publish-config', '--docker'] : ['ray:publish-config'],
+            ],
+            'spatie/laravel-medialibrary' => [
+                ['vendor:publish', '--provider=Spatie\\MediaLibrary\\MediaLibraryServiceProvider', '--tag=medialibrary-migrations'],
+                ['migrate'],
+            ],
+            'spatie/laravel-permission' => [
+                ['vendor:publish', '--provider=Spatie\\Permission\\PermissionServiceProvider'],
+                ['optimize:clear'],
+                ['migrate'],
+            ],
+        ];
+
+        return $commands[$package] ?? [];
+    }
+
+    protected function ensureUserModelUsesSanctumTokens(): bool
+    {
+        $userModelPath = app_path('Models/User.php');
+
+        if (!file_exists($userModelPath)) {
+            warning('⚠ Unable to add Sanctum HasApiTokens trait because app/Models/User.php was not found.');
+
+            return false;
+        }
+
+        $content = (string) file_get_contents($userModelPath);
+        $updated = $this->addSanctumTraitToUserModel($content);
+
+        if ($updated === $content) {
+            return true;
+        }
+
+        file_put_contents($userModelPath, $updated);
+
+        info('→ Added Laravel\\Sanctum\\HasApiTokens to app/Models/User.php');
+
+        return true;
+    }
+
+    protected function ensureApiRoutesRegistered(): bool
+    {
+        $bootstrapPath = base_path('bootstrap/app.php');
+
+        if (!file_exists($bootstrapPath)) {
+            warning('⚠ Unable to register API routes because bootstrap/app.php was not found.');
+
+            return false;
+        }
+
+        $content = (string) file_get_contents($bootstrapPath);
+        $updated = $this->addApiRoutesToBootstrap($content);
+
+        if ($updated === $content) {
+            return true;
+        }
+
+        file_put_contents($bootstrapPath, $updated);
+
+        info('→ Registered routes/api.php in bootstrap/app.php');
+
+        return true;
+    }
+
+    protected function addApiRoutesToBootstrap(string $content): string
+    {
+        if (str_contains($content, "api: __DIR__ . '/../routes/api.php'") || str_contains($content, "api: __DIR__.'/../routes/api.php'")) {
+            return $content;
+        }
+
+        return (string) preg_replace(
+            "/(web:\s*__DIR__\s*\.\s*'\/\.\.\/routes\/web\.php',\R)/",
+            "$1        api: __DIR__ . '/../routes/api.php'," . PHP_EOL,
+            $content,
+            1
+        );
+    }
+
+    protected function addSanctumTraitToUserModel(string $content): string
+    {
+        if (!str_contains($content, 'use Laravel\\Sanctum\\HasApiTokens;')) {
+            $content = (string) preg_replace(
+                '/^use Illuminate\\\\Notifications\\\\Notifiable;\R/m',
+                'use Illuminate\\Notifications\\Notifiable;' . PHP_EOL . 'use Laravel\\Sanctum\\HasApiTokens;' . PHP_EOL,
+                $content,
+                1
+            );
+        }
+
+        if (!preg_match('/^    use .*\\bHasApiTokens\\b.*;$/m', $content)) {
+            $content = (string) preg_replace(
+                '/^    use (.*\\bHasFactory\\b.*);$/m',
+                '    use HasApiTokens, $1;',
+                $content,
+                1
+            );
+        }
+
+        return $content;
     }
 
     protected function configureEnvironment(): void
