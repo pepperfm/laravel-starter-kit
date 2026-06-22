@@ -145,15 +145,20 @@ final class SetupCommand extends Command
         $otherChoices = multiselect(
             label: 'Select additional features to install',
             options: [
+                'opcodesio/log-viewer' => '📋 Log Viewer — browser UI for Laravel logs',
+                'laravel/horizon' => '📈 Horizon — Redis queue dashboard',
+                'laravel/telescope' => '🔭 Telescope — local debugging dashboard [dev]',
+                'laravel/pulse' => '💓 Pulse — application performance and usage metrics',
                 'defstudio/telegraph' => '🤖 Telegram Bot Integration (Telegraph)',
                 'spatie/laravel-ray' => '🛠 Ray Debugger (requires license) [dev]',
                 'spatie/laravel-medialibrary' => '🖼  Spatie MediaLibrary (file uploads)',
                 'spatie/laravel-permission' => '🔐 Spatie Permissions (roles & permissions)',
             ],
+            scroll: 8,
         );
 
         foreach ($otherChoices as $selected) {
-            if ($selected === 'spatie/laravel-ray') {
+            if (in_array($selected, ['laravel/telescope', 'spatie/laravel-ray'], true)) {
                 $this->installedDevPackages[] = $selected;
 
                 continue;
@@ -276,6 +281,20 @@ final class SetupCommand extends Command
         $commands = [
             'laravel/sanctum' => [
                 ['install:api', '--without-migration-prompt'],
+            ],
+            'opcodesio/log-viewer' => [
+                ['log-viewer:publish'],
+            ],
+            'laravel/horizon' => [
+                ['horizon:install'],
+            ],
+            'laravel/telescope' => [
+                ['telescope:install'],
+                ['migrate'],
+            ],
+            'laravel/pulse' => [
+                ['vendor:publish', '--provider=Laravel\\Pulse\\PulseServiceProvider'],
+                ['migrate'],
             ],
             'defstudio/telegraph' => [
                 ['vendor:publish', '--tag=telegraph-migrations'],

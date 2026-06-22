@@ -72,6 +72,39 @@ it('installs sanctum and swagger nuxt ui when api support is selected', function
     ]);
 });
 
+it('installs selected observability packages from extras', function (): void {
+    Prompt::fake([
+        Key::SPACE,
+        Key::DOWN,
+        Key::SPACE,
+        Key::DOWN,
+        Key::SPACE,
+        Key::DOWN,
+        Key::SPACE,
+        Key::ENTER,
+    ]);
+
+    $command = app(SetupCommand::class);
+    $askExtras = new ReflectionMethod($command, 'askExtras');
+    $askExtras->setAccessible(true);
+
+    $askExtras->invoke($command);
+
+    $installedPackages = new ReflectionProperty($command, 'installedPackages');
+    $installedPackages->setAccessible(true);
+
+    $installedDevPackages = new ReflectionProperty($command, 'installedDevPackages');
+    $installedDevPackages->setAccessible(true);
+
+    expect($installedPackages->getValue($command))->toBe([
+        'opcodesio/log-viewer',
+        'laravel/horizon',
+        'laravel/pulse',
+    ])->and($installedDevPackages->getValue($command))->toBe([
+        'laravel/telescope',
+    ]);
+});
+
 it('defines sanctum api scaffolding as a post install command', function (): void {
     $command = app(SetupCommand::class);
     $postInstallCommands = new ReflectionMethod($command, 'postInstallCommandsForPackage');
@@ -79,6 +112,24 @@ it('defines sanctum api scaffolding as a post install command', function (): voi
 
     expect($postInstallCommands->invoke($command, 'laravel/sanctum'))->toBe([
         ['install:api', '--without-migration-prompt'],
+    ]);
+});
+
+it('defines observability package post install commands', function (): void {
+    $command = app(SetupCommand::class);
+    $postInstallCommands = new ReflectionMethod($command, 'postInstallCommandsForPackage');
+    $postInstallCommands->setAccessible(true);
+
+    expect($postInstallCommands->invoke($command, 'opcodesio/log-viewer'))->toBe([
+        ['log-viewer:publish'],
+    ])->and($postInstallCommands->invoke($command, 'laravel/horizon'))->toBe([
+        ['horizon:install'],
+    ])->and($postInstallCommands->invoke($command, 'laravel/telescope'))->toBe([
+        ['telescope:install'],
+        ['migrate'],
+    ])->and($postInstallCommands->invoke($command, 'laravel/pulse'))->toBe([
+        ['vendor:publish', '--provider=Laravel\\Pulse\\PulseServiceProvider'],
+        ['migrate'],
     ]);
 });
 

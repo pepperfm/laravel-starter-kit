@@ -18,6 +18,11 @@ setup flow — ready for production-focused application work from day one.
   - [spatie/laravel-data](https://github.com/spatie/laravel-data)
 - API scaffolding with [Laravel Sanctum](https://laravel.com/docs/sanctum)
 - Ready-to-use Swagger Nuxt UI docs with [pepperfm/swagger-nuxt-ui-for-laravel](https://docs.pepperfm.com/swagger-nuxt-ui-for-laravel)
+- Optional observability tools during setup:
+  - [OPcodes Log Viewer](https://log-viewer.opcodes.io/)
+  - [Laravel Horizon](https://laravel.com/docs/horizon)
+  - [Laravel Telescope](https://laravel.com/docs/telescope)
+  - [Laravel Pulse](https://laravel.com/docs/pulse)
 - Telegram bot integration via [defstudio/telegraph](https://github.com/defstudio/telegraph)
 - Local development environment powered by [Laravel Sail](https://laravel.com/docs/sail)
 - UUID primary keys for the base user model
@@ -37,7 +42,7 @@ After creating your project, the interactive starter:setup command will run auto
 - Whether setup commands should run on the host machine, through Sail, or auto-detect a running Sail container
 - Whether to publish the custom admin frontend foundation
 - API support packages, Sanctum, and Swagger Nuxt UI docs
-- Optional features like Telegram bot integration, Ray debugger, Media Library, and Permissions
+- Optional features like Log Viewer, Horizon, Telescope, Pulse, Telegram bot integration, Ray debugger, Media Library, and Permissions
 
 You will also be prompted to configure environment variables `WWWUSER` and `WWWGROUP` for proper permissions. The setup command also normalizes the PostgreSQL `DB_*` variables so they are active after `laravel new`.
 
@@ -68,6 +73,10 @@ For installed packages, the following post-install artisan commands will run aut
 | Package                          | Команды                                                                                 |
 |----------------------------------|------------------------------------------------------------------------------------------|
 | `laravel/sanctum`              | `php artisan install:api --without-migration-prompt` |
+| `opcodesio/log-viewer`          | `php artisan log-viewer:publish` |
+| `laravel/horizon`               | `php artisan horizon:install` |
+| `laravel/telescope`             | `php artisan telescope:install`<br>`php artisan migrate` |
+| `laravel/pulse`                 | `php artisan vendor:publish --provider="Laravel\Pulse\PulseServiceProvider"`<br>`php artisan migrate` |
 | `defstudio/telegraph`           | `php artisan vendor:publish --tag="telegraph-migrations"`<br>`php artisan migrate`      |
 | `spatie/laravel-medialibrary`   | `php artisan vendor:publish --provider="Spatie\MediaLibrary\MediaLibraryServiceProvider" --tag="medialibrary-migrations"`<br>`php artisan migrate` |
 | `spatie/laravel-permission`     | `php artisan vendor:publish --provider="Spatie\Permission\PermissionServiceProvider"`<br>`php artisan optimize:clear`<br>`php artisan migrate` |
