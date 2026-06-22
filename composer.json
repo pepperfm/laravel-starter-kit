@@ -5,7 +5,7 @@
     "keywords": ["laravel", "framework", "starter"],
     "license": "MIT",
     "require": {
-        "php": "^8.4",
+        "php": "^8.5",
         "laravel/framework": "^13.0",
         "laravel/prompts": "^0.3.5",
         "laravel/tinker": "^3.0"
@@ -54,13 +54,17 @@
         ],
         "post-create-project-cmd": [
             "@php artisan key:generate --ansi",
-            "@php -r \"file_exists('database/database.sqlite') || touch('database/database.sqlite');\"",
-            "@php artisan starter:setup"
+            "@php -r \"file_exists('database/database.sqlite') || touch('database/database.sqlite');\""
         ]
     },
     "extra": {
         "laravel": {
-            "dont-discover": []
+            "dont-discover": [],
+            "installer": {
+                "post-create-project": [
+                    "@php artisan starter:setup"
+                ]
+            }
         }
     },
     "config": {
