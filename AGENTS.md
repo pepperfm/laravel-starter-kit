@@ -46,6 +46,9 @@ tests/                # Pest feature and architecture tests
 | `artisan` | Laravel CLI entry point |
 | `app/Console/Commands/SetupCommand.php` | Интерактивная настройка `.env`, host/Sail runtime и установка опциональных пакетов |
 | `app/Setup/AdminPanelFrontendInstaller.php` | Публикация optional Inertia/Vue/Nuxt UI admin frontend preset |
+| `app/Setup/StarterKitPreset.php` | Preset-наборы `api`, `admin`, `observability`, `full` для setup-команды |
+| `app/Setup/StarterKitPackageRegistry.php` | Метаданные optional packages, dev/runtime grouping и post-install команды |
+| `app/Setup/StarterKitInstallationSummary.php` | Console summary перед запуском Composer/frontend/post-install шагов |
 | `routes/web.php` | Web route definitions |
 | `app/Bootstrap/WithExceptions.php` | JSON error rendering для API-запросов |
 | `app/Bootstrap/WithMiddleware.php` | Guest redirect на `/panel` для новой admin area |
