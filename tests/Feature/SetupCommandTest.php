@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 use App\Console\Commands\SetupCommand;
+use App\Setup\StarterKitPackageRegistry;
+use App\Setup\StarterKitPreset;
 use Laravel\Prompts\Key;
 use Laravel\Prompts\Prompt;
 
@@ -105,31 +107,94 @@ it('installs selected observability packages from extras', function (): void {
     ]);
 });
 
-it('defines sanctum api scaffolding as a post install command', function (): void {
-    $command = app(SetupCommand::class);
-    $postInstallCommands = new ReflectionMethod($command, 'postInstallCommandsForPackage');
-    $postInstallCommands->setAccessible(true);
+it('applies the api preset with default api packages', function (): void {
+    expect(StarterKitPreset::Api->packages())->toBe([
+        'laravel/sanctum',
+        'pepperfm/swagger-nuxt-ui-for-laravel',
+        'spatie/laravel-data',
+    ])
+        ->and(StarterKitPreset::Api->devPackages())->toBe([])
+        ->and(StarterKitPreset::Api->installsAdminFrontend())->toBeFalse();
+});
 
-    expect($postInstallCommands->invoke($command, 'laravel/sanctum'))->toBe([
+it('applies the observability preset with telescope as a dev package', function (): void {
+    expect(StarterKitPreset::Observability->packages())->toBe([
+        'opcodesio/log-viewer',
+        'laravel/horizon',
+        'laravel/pulse',
+    ])->and(StarterKitPreset::Observability->devPackages())->toBe([
+        'laravel/telescope',
+    ]);
+});
+
+it('applies the full preset with admin api and observability packages', function (): void {
+    expect(StarterKitPreset::Full->installsAdminFrontend())->toBeTrue()
+        ->and(StarterKitPreset::Full->packages())->toBe([
+            'inertiajs/inertia-laravel:^3.0',
+            'tightenco/ziggy:^2.5',
+            'laravel/sanctum',
+            'pepperfm/swagger-nuxt-ui-for-laravel',
+            'spatie/laravel-data',
+            'opcodesio/log-viewer',
+            'laravel/horizon',
+            'laravel/pulse',
+        ])->and(StarterKitPreset::Full->devPackages())->toBe([
+            'laravel/telescope',
+        ]);
+});
+
+it('rejects unknown presets', function (): void {
+    expect(StarterKitPreset::tryFrom('unknown'))->toBeNull()
+        ->and(StarterKitPreset::values())->toBe([
+            'api',
+            'admin',
+            'observability',
+            'full',
+        ]);
+});
+
+it('defines sanctum api scaffolding as a post install command', function (): void {
+    expect(StarterKitPackageRegistry::postInstallCommandsFor('laravel/sanctum'))->toBe([
         ['install:api', '--without-migration-prompt'],
     ]);
 });
 
 it('defines observability package post install commands', function (): void {
-    $command = app(SetupCommand::class);
-    $postInstallCommands = new ReflectionMethod($command, 'postInstallCommandsForPackage');
-    $postInstallCommands->setAccessible(true);
-
-    expect($postInstallCommands->invoke($command, 'opcodesio/log-viewer'))->toBe([
+    expect(StarterKitPackageRegistry::postInstallCommandsFor('opcodesio/log-viewer'))->toBe([
         ['log-viewer:publish'],
-    ])->and($postInstallCommands->invoke($command, 'laravel/horizon'))->toBe([
+    ])->and(StarterKitPackageRegistry::postInstallCommandsFor('laravel/horizon'))->toBe([
         ['horizon:install'],
-    ])->and($postInstallCommands->invoke($command, 'laravel/telescope'))->toBe([
+    ])->and(StarterKitPackageRegistry::postInstallCommandsFor('laravel/telescope'))->toBe([
         ['telescope:install'],
         ['migrate'],
-    ])->and($postInstallCommands->invoke($command, 'laravel/pulse'))->toBe([
+    ])->and(StarterKitPackageRegistry::postInstallCommandsFor('laravel/pulse'))->toBe([
         ['vendor:publish', '--provider=Laravel\\Pulse\\PulseServiceProvider'],
         ['migrate'],
+    ]);
+});
+
+it('summarizes selected post install commands without duplicates', function (): void {
+    expect(StarterKitPackageRegistry::selectedPostInstallCommands(
+        packages: [
+            'laravel/sanctum',
+            'laravel/sanctum',
+            'pepperfm/swagger-nuxt-ui-for-laravel',
+            'opcodesio/log-viewer',
+        ],
+        devPackages: [
+            'laravel/telescope',
+        ],
+    ))->toBe([
+        'laravel/sanctum' => [
+            ['install:api', '--without-migration-prompt'],
+        ],
+        'opcodesio/log-viewer' => [
+            ['log-viewer:publish'],
+        ],
+        'laravel/telescope' => [
+            ['telescope:install'],
+            ['migrate'],
+        ],
     ]);
 });
 

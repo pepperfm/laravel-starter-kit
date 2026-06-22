@@ -43,6 +43,7 @@ After creating your project, the interactive starter:setup command will run auto
 - Whether to publish the custom admin frontend foundation
 - API support packages, Sanctum, and Swagger Nuxt UI docs
 - Optional features like Log Viewer, Horizon, Telescope, Pulse, Telegram bot integration, Ray debugger, Media Library, and Permissions
+- Review an installation summary before Composer, frontend, or post-install Artisan commands run
 
 You will also be prompted to configure environment variables `WWWUSER` and `WWWGROUP` for proper permissions. The setup command also normalizes the PostgreSQL `DB_*` variables so they are active after `laravel new`.
 
@@ -66,6 +67,23 @@ Run manually anytime:
 php artisan starter:setup
 ```
 Interactive setup will help you customize your project features and install optional packages with their post-install steps.
+
+Preset mode is available when you want a repeatable setup path:
+```bash
+php artisan starter:setup --preset=api
+php artisan starter:setup --preset=admin
+php artisan starter:setup --preset=observability
+php artisan starter:setup --preset=full
+```
+
+Available presets:
+
+| Preset | Includes |
+| --- | --- |
+| `api` | Sanctum, Swagger Nuxt UI docs, Spatie Laravel Data |
+| `admin` | Custom Inertia + Vue + Nuxt UI admin frontend foundation |
+| `observability` | Log Viewer, Horizon, Pulse, Telescope as a dev dependency |
+| `full` | `admin` + `api` + `observability` |
 
 ## 🛠 Post-Install Commands
 For installed packages, the following post-install artisan commands will run automatically unless `--no-post` is used:

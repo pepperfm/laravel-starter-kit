@@ -4,21 +4,26 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
-use App\Setup\AdminPanelFrontendInstaller;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Process;
+use App\Setup\AdminPanelFrontendInstaller;
+use App\Setup\StarterKitInstallationSummary;
+use App\Setup\StarterKitPackageRegistry;
+use App\Setup\StarterKitPreset;
 
 use function Laravel\Prompts\{confirm, info, multiselect, note, select, text, warning};
 
 final class SetupCommand extends Command
 {
-    private const COMMAND_RUNTIME_AUTO = 'auto';
+    private const string COMMAND_RUNTIME_AUTO = 'auto';
 
-    private const COMMAND_RUNTIME_HOST = 'host';
+    private const string COMMAND_RUNTIME_HOST = 'host';
 
-    private const COMMAND_RUNTIME_SAIL = 'sail';
+    private const string COMMAND_RUNTIME_SAIL = 'sail';
 
-    protected $signature = 'starter:setup {--no-post : Skip running post-install artisan commands}';
+    protected $signature = 'starter:setup
+        {--no-post : Skip running post-install artisan commands}
+        {--preset= : Install a predefined package set: api, admin, observability, full}';
 
     protected $description = 'Interactive setup for the PepperFM Laravel starter kit.';
 
@@ -34,6 +39,8 @@ final class SetupCommand extends Command
 
     protected bool $adminFrontendRequested = false;
 
+    protected ?StarterKitPreset $selectedPreset = null;
+
     protected string $commandRuntime = self::COMMAND_RUNTIME_AUTO;
 
     protected ?bool $sailProxyAvailable = null;
@@ -45,20 +52,24 @@ final class SetupCommand extends Command
         $this->configureEnvironment();
         $this->askCommandRuntime();
 
-        $this->askAdminFrontend();
-        $this->askApiSupport();
-        $this->askExtras();
-
-        if ($this->commandRuntime === self::COMMAND_RUNTIME_SAIL && !$this->prepareCommandRuntime()) {
+        if (!$this->applyPresetFromOption()) {
             return self::FAILURE;
         }
-
+        if ($this->selectedPreset === null) {
+            $this->askAdminFrontend();
+            $this->askApiSupport();
+            $this->askExtras();
+        }
         if ($this->installedPackages === [] && $this->installedDevPackages === []) {
             note('⚠️ No packages selected for installation.');
 
             return self::SUCCESS;
         }
+        if (!$this->confirmInstallationSummary()) {
+            note('Setup cancelled before package installation.');
 
+            return self::SUCCESS;
+        }
         if (!$this->prepareCommandRuntime()) {
             return self::FAILURE;
         }
@@ -94,6 +105,33 @@ final class SetupCommand extends Command
         return self::SUCCESS;
     }
 
+    protected function applyPresetFromOption(): bool
+    {
+        $inputPreset = $this->option('preset');
+        if (!is_string($inputPreset) || trim($inputPreset) === '') {
+            return true;
+        }
+
+        $preset = $inputPreset
+                |> trim(...)
+                |> strtolower(...)
+                |> StarterKitPreset::tryFrom(...);
+        if (!$preset instanceof StarterKitPreset) {
+            warning('⚠ Unknown preset. Available presets: ' . implode(', ', StarterKitPreset::values()) . '.');
+
+            return false;
+        }
+
+        info("Applying $preset->value preset.");
+
+        $this->selectedPreset = $preset;
+        $this->adminFrontendRequested = $preset->installsAdminFrontend();
+        array_push($this->installedPackages, ...$preset->packages());
+        array_push($this->installedDevPackages, ...$preset->devPackages());
+
+        return true;
+    }
+
     protected function askAdminFrontend(): void
     {
         $this->adminFrontendRequested = confirm(
@@ -115,7 +153,6 @@ final class SetupCommand extends Command
     protected function askApiSupport(): void
     {
         $apiNeeded = confirm('Will this app be used as an API?', default: false);
-
         if (!$apiNeeded) {
             note('⚠️ Skipping API support installation.');
 
@@ -158,7 +195,7 @@ final class SetupCommand extends Command
         );
 
         foreach ($otherChoices as $selected) {
-            if (in_array($selected, ['laravel/telescope', 'spatie/laravel-ray'], true)) {
+            if (StarterKitPackageRegistry::isDevPackage($selected)) {
                 $this->installedDevPackages[] = $selected;
 
                 continue;
@@ -176,7 +213,7 @@ final class SetupCommand extends Command
      */
     protected function requirePackages(array $packages, bool $dev): bool
     {
-        $packages = array_values(array_unique(array_filter(array_map('trim', $packages))));
+        $packages = StarterKitPackageRegistry::normalized($packages);
         if ($packages === []) {
             return true;
         }
@@ -214,13 +251,30 @@ final class SetupCommand extends Command
         return false;
     }
 
+    protected function confirmInstallationSummary(): bool
+    {
+        return new StarterKitInstallationSummary(
+            preset: $this->selectedPreset,
+            commandRuntime: $this->commandRuntime,
+            adminFrontendRequested: $this->adminFrontendRequested,
+            packages: StarterKitPackageRegistry::normalized($this->installedPackages),
+            devPackages: StarterKitPackageRegistry::normalized($this->installedDevPackages),
+            skipPostInstall: (bool) $this->option('no-post'),
+            postInstallCommands: StarterKitPackageRegistry::selectedPostInstallCommands(
+                packages: $this->installedPackages,
+                devPackages: $this->installedDevPackages,
+                usingSail: $this->usingSail(),
+            ),
+        )->confirm($this);
+    }
+
     protected function runSelectedPostInstallCommands(): bool
     {
-        $all = array_merge($this->installedPackages, $this->installedDevPackages);
+        $all = StarterKitPackageRegistry::normalized([...$this->installedPackages, ...$this->installedDevPackages]);
         $successful = true;
 
         foreach ($all as $packageSpec) {
-            $package = $this->packageName($packageSpec);
+            $package = StarterKitPackageRegistry::packageName($packageSpec);
             $successful = $this->runPostInstallCommands($package) && $successful;
         }
 
@@ -233,7 +287,6 @@ final class SetupCommand extends Command
     protected function runPostInstallCommands(string $package): bool
     {
         $commands = $this->postInstallCommandsForPackage($package);
-
         if ($commands === []) {
             return true;
         }
@@ -252,7 +305,6 @@ final class SetupCommand extends Command
             $process = Process::path(base_path())
                 ->timeout(600)
                 ->run($command);
-
             if ($process->successful()) {
                 $this->output->write($process->output());
 
@@ -278,43 +330,7 @@ final class SetupCommand extends Command
      */
     protected function postInstallCommandsForPackage(string $package): array
     {
-        $commands = [
-            'laravel/sanctum' => [
-                ['install:api', '--without-migration-prompt'],
-            ],
-            'opcodesio/log-viewer' => [
-                ['log-viewer:publish'],
-            ],
-            'laravel/horizon' => [
-                ['horizon:install'],
-            ],
-            'laravel/telescope' => [
-                ['telescope:install'],
-                ['migrate'],
-            ],
-            'laravel/pulse' => [
-                ['vendor:publish', '--provider=Laravel\\Pulse\\PulseServiceProvider'],
-                ['migrate'],
-            ],
-            'defstudio/telegraph' => [
-                ['vendor:publish', '--tag=telegraph-migrations'],
-                ['migrate'],
-            ],
-            'spatie/laravel-ray' => [
-                $this->usingSail() ? ['ray:publish-config', '--docker'] : ['ray:publish-config'],
-            ],
-            'spatie/laravel-medialibrary' => [
-                ['vendor:publish', '--provider=Spatie\\MediaLibrary\\MediaLibraryServiceProvider', '--tag=medialibrary-migrations'],
-                ['migrate'],
-            ],
-            'spatie/laravel-permission' => [
-                ['vendor:publish', '--provider=Spatie\\Permission\\PermissionServiceProvider'],
-                ['optimize:clear'],
-                ['migrate'],
-            ],
-        ];
-
-        return $commands[$package] ?? [];
+        return StarterKitPackageRegistry::postInstallCommandsFor($package, usingSail: $this->usingSail());
     }
 
     protected function ensureUserModelUsesSanctumTokens(): bool
@@ -371,7 +387,7 @@ final class SetupCommand extends Command
             return $content;
         }
 
-        return (string) preg_replace(
+        return preg_replace(
             "/(web:\s*__DIR__\s*\.\s*'\/\.\.\/routes\/web\.php',\R)/",
             "$1        api: __DIR__ . '/../routes/api.php'," . PHP_EOL,
             $content,
@@ -382,7 +398,7 @@ final class SetupCommand extends Command
     protected function addSanctumTraitToUserModel(string $content): string
     {
         if (!str_contains($content, 'use Laravel\\Sanctum\\HasApiTokens;')) {
-            $content = (string) preg_replace(
+            $content = preg_replace(
                 '/^use Illuminate\\\\Notifications\\\\Notifiable;\R/m',
                 'use Illuminate\\Notifications\\Notifiable;' . PHP_EOL . 'use Laravel\\Sanctum\\HasApiTokens;' . PHP_EOL,
                 $content,
@@ -410,7 +426,6 @@ final class SetupCommand extends Command
         if (!file_exists($envPath) && file_exists($envExamplePath)) {
             copy($envExamplePath, $envPath);
         }
-
         if (!file_exists($envPath)) {
             warning('⚠️ .env file not found, skipping environment configuration.');
 
@@ -489,7 +504,6 @@ final class SetupCommand extends Command
             label: 'Sail is not running. Start Sail containers now?',
             hint: 'Required when setup commands should run through Sail.',
         );
-
         if (!$shouldStartSail) {
             warning('⚠ Setup stopped because Sail was selected but is not running.');
 
@@ -503,7 +517,6 @@ final class SetupCommand extends Command
         $process = Process::path(base_path())
             ->timeout(1200)
             ->run($command);
-
         if (!$process->successful()) {
             warning('⚠ Failed to start Sail containers.');
             $this->output->write($process->errorOutput());
@@ -543,7 +556,6 @@ final class SetupCommand extends Command
     protected function envValue(string $content, string $key, array $placeholderValues = []): ?string
     {
         $pattern = '/^\s*#?\s*' . preg_quote($key, '/') . '=(.*)$/m';
-
         if (preg_match($pattern, $content, $matches) !== 1) {
             return null;
         }
@@ -567,13 +579,6 @@ final class SetupCommand extends Command
         $name = preg_replace('/\W/', '_', $name) ?: 'laravel';
 
         return strtolower(trim($name, '_')) ?: 'laravel';
-    }
-
-    protected function packageName(string $packageSpec): string
-    {
-        $parts = explode(':', $packageSpec, 2);
-
-        return trim($parts[0]);
     }
 
     protected function usingSail(): bool
@@ -608,7 +613,9 @@ final class SetupCommand extends Command
             return false;
         }
 
-        $runningServices = array_filter(array_map('trim', explode(PHP_EOL, $process->output())));
+        $runningServices = explode(PHP_EOL, $process->output())
+                |> (static fn($x) => array_map('trim', $x))
+                |> array_filter(...);
 
         return in_array('app', $runningServices, true);
     }
