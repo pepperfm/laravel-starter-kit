@@ -29,21 +29,18 @@ class WithExceptions
                     $e instanceof \Illuminate\Auth\Access\AuthorizationException
                 ) {
                     return self::jsonErrorResponse(
-                        data: [],
                         message: 'Ошибка авторизации',
                         httpStatusCode: JsonResponse::HTTP_UNAUTHORIZED
                     );
                 }
                 if ($e instanceof NotFoundHttpException) {
                     return self::jsonErrorResponse(
-                        data: [],
                         message: 'Запись не найдена',
                         httpStatusCode: JsonResponse::HTTP_NOT_FOUND
                     );
                 }
                 if ($e instanceof \Illuminate\Validation\ValidationException) {
                     return self::jsonErrorResponse(
-                        data: [],
                         message: $e->getMessage(),
                         httpStatusCode: JsonResponse::HTTP_UNPROCESSABLE_ENTITY
                     );
@@ -53,21 +50,20 @@ class WithExceptions
                     ? $e->getStatusCode()
                     : JsonResponse::HTTP_INTERNAL_SERVER_ERROR;
 
-                return self::jsonErrorResponse([], message: $e->getMessage(), httpStatusCode: $statusCode);
+                return self::jsonErrorResponse(message: $e->getMessage(), httpStatusCode: $statusCode);
             }
         };
     }
 
     /**
-     * @param array<mixed> $data
      * @param string $message
      * @param int $httpStatusCode
      */
     private static function jsonErrorResponse(
-        array $data,
         string $message,
         int $httpStatusCode,
     ): JsonResponse {
+        $data = [];
         if (interface_exists(\Pepperfm\ApiBaseResponder\Contracts\ResponseContract::class)) {
             return app(\Pepperfm\ApiBaseResponder\Contracts\ResponseContract::class)
                 ->response(data: $data, message: $message, httpStatusCode: $httpStatusCode);
