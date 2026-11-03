@@ -84,6 +84,6 @@ tests/                # Pest feature and architecture tests
   - Верно: сначала `git checkout master`, затем `git pull origin master`
 - Не считать Filament/Moonshine целевой архитектурой или обязательной dependency.
 - Панель в starter-stub использует UDashboardGroup/Sidebar/Navbar из Nuxt UI и Inertia/Vue. Не переносить Nuxt routing, Nitro и demo-страницы из внешнего шаблона.
-- Маршрут /panel в исходном preset пока публичный: перед продакшеном обязательны auth middleware и контроль прав. `noindex` не защищает доступ.
+- Маршрут /panel доступен только через Laravel session auth, гости перенаправляются на /panel/login. Первого пользователя создают через `php artisan panel:user`; регистрации нет. Роли/политики необходимы отдельно, если доступ должен быть только у администраторов.
 - При переустановке admin preset не перезаписывать файлы пользователя. Для обновления зависимостей собирать lock-файлы заново через package manager.
 - Не писать бизнес-код во время setup-контекста; для изменений использовать `$aif-plan`, затем `$aif-implement`.

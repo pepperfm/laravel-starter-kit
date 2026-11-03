@@ -17,6 +17,15 @@
         "dark": "Dark",
         "light": "Light"
       }
+    },
+    "auth": {
+      "title": "Panel sign in",
+      "subtitle": "Sign in using an application account.",
+      "email": "Email",
+      "password": "Password",
+      "remember": "Remember me",
+      "submit": "Sign in",
+      "logout": "Sign out"
     }
   }
 }

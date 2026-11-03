@@ -51,7 +51,9 @@ If you choose Sail and the app container is not running yet, setup can start Sai
 
 **Admin preset notes:** The initial installation replaces the base `package.json`, `vite.config.js` and `resources/css/app.css` with the Inertia/Vue foundation. To avoid destroying work, the installer refuses to overwrite any other existing preset target (including an already installed panel). It is not a general-purpose update command for existing projects.
 
-The provided `/panel` route is a **public UI skeleton**, not a production-ready secured admin area. The preset **does not install login or add the `auth` middleware**. Add authentication and authorization before exposing the panel outside your development environment. `noindex` is not a security control.
+The panel is protected by Laravel session authentication. Guests visiting `/panel` are redirected to `/panel/login`; failed attempts are rate-limited, and logout invalidates the session. There is intentionally **no public sign-up**.
+
+After installing the admin preset, run migrations and create an initial application user with `php artisan panel:user` (the command securely prompts for a password). Then sign in at `/panel/login`. **Any authenticated application user can currently access the panel**; add roles/policies if the project requires a separate administrator role. For public deployments, configure HTTPS and secure cookie/session settings.
 
 Frontend package constraints are refreshed for new installs. The PHP lockfile remains pinned until it is regenerated with Composer, so run `composer update -W` in a controlled environment and review its diff before releasing a refreshed template.
 

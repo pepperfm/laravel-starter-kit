@@ -82,6 +82,16 @@ const userMenuItems = computed<DropdownMenuItem[][]>(() => [
       },
     },
   ],
+  [
+    {
+      label: t('panel.auth.logout'),
+      icon: 'i-lucide-log-out',
+      onSelect: () => {
+        userMenuOpen.value = false
+        router.post(route('panel.logout'))
+      },
+    },
+  ],
 ])
 </script>
 
