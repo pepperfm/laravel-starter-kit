@@ -7,14 +7,13 @@ namespace App\Http\Controllers\Panel;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
-use Inertia\Inertia;
 
 /*
  * Минимальная сессионная авторизация панели без публичной регистрации.
  */
 final class PanelSessionController
 {
-    public function create(): Response
+    public function create(): \Inertia\Respone
     {
         return inertia('Panel/Login');
     }
