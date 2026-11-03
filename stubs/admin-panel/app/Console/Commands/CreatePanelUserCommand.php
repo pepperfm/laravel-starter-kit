@@ -4,18 +4,18 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
-use App\Models\User;
 use Illuminate\Console\Command;
+use Illuminate\Console\Attributes\Description;
+use Illuminate\Console\Attributes\Signature;
+use App\Models\User;
 
-/**
+/*
  * Локальное создание первой учётной записи без открытой регистрации.
  */
+#[Signature('panel:user')]
+#[Description('Create an application user who can sign in to the protected panel.')]
 final class CreatePanelUserCommand extends Command
 {
-    protected $signature = 'panel:user';
-
-    protected $description = 'Create an application user who can sign in to the protected panel.';
-
     public function handle(): int
     {
         $name = trim((string) $this->ask('Name'));
@@ -28,7 +28,6 @@ final class CreatePanelUserCommand extends Command
 
             return self::FAILURE;
         }
-
         if (User::query()->where('email', $email)->exists()) {
             $this->error('An account with this email already exists.');
 
