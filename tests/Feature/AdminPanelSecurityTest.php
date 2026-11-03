@@ -19,7 +19,7 @@ it('ships a guarded panel with a functioning session login/logout flow', functio
         ->toContain("Auth::guard('web')->logout()")
         ->toContain('session()->invalidate()')
         ->and($middleware)->toContain("'/panel/login'")
-        ->and($command)->toContain("protected $signature = 'panel:user'")
+        ->and($command)->toContain('protected $signature = \'panel:user\'')
         ->toContain('$this->secret(');
 });
 
