@@ -3,7 +3,7 @@ import type { DropdownMenuItem, NavigationMenuItem } from '@nuxt/ui'
 import type { SharedData } from '@/types'
 import { Head, router, usePage } from '@inertiajs/vue3'
 import { useColorMode, useMounted, useStorage } from '@vueuse/core'
-import { computed, ref } from 'vue'
+import { computed, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { route } from 'ziggy-js'
 
@@ -16,7 +16,7 @@ const sidebarCollapsed = useStorage<boolean>(
 const sidebarOpen = ref(false)
 const userMenuOpen = ref(false)
 
-router.on('finish', () => {
+const unregisterNavigation = router.on('finish', () => {
   if (typeof window === 'undefined') {
     return
   }
@@ -25,6 +25,7 @@ router.on('finish', () => {
     sidebarOpen.value = false
   }
 })
+onUnmounted(unregisterNavigation)
 
 const page = usePage<SharedData>()
 const { t } = useI18n()
@@ -94,20 +95,14 @@ const userMenuItems = computed<DropdownMenuItem[][]>(() => [
   </Head>
 
   <UApp :toaster="{ expand: true }">
-    <UDashboardGroup unit="rem">
+    <UDashboardGroup unit="rem" storage="local">
       <UDashboardSidebar
         id="panel"
         v-model:collapsed="sidebarCollapsed"
         v-model:open="sidebarOpen"
         collapsible
-        :size="5"
-        :collapsed-size="5"
-        class="
-          bg-elevated/25
-          sm:data-[collapsed=false]:!w-[17rem]
-          sm:data-[collapsed=true]:!w-[5rem]
-          max-sm:!w-[18rem]
-        "
+        resizable
+        class="bg-elevated/25"
         :ui="{ footer: 'border-t border-default' }"
       >
         <template #header="{ collapsed }">
@@ -132,11 +127,6 @@ const userMenuItems = computed<DropdownMenuItem[][]>(() => [
                 :collapsed="collapsed"
                 :tooltip="collapsed"
                 class="py-4"
-                :ui="{
-                  root: 'flex flex-col gap-2 px-2',
-                  list: 'flex flex-col gap-2',
-                  link: 'rounded-md text-sm font-medium px-3 py-2 hover:bg-primary-500/10 data-[active=true]:bg-primary-500/10 data-[active=true]:text-primary-500',
-                }"
               />
             </div>
 

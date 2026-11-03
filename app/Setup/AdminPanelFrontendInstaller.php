@@ -32,11 +32,37 @@ final class AdminPanelFrontendInstaller
             return false;
         }
 
-        foreach (File::allFiles($source, true) as $file) {
+        // The frontend preset replaces a few default Laravel skeleton files on
+        // first install. Everything else must be new: never overwrite user code
+        // on a second setup run or in a partially configured application.
+        $replaceableSkeletonFiles = [
+            'package.json',
+            'vite.config.js',
+            'resources/css/app.css',
+        ];
+        $files = File::allFiles($source, true);
+
+        foreach ($files as $file) {
+            $relativePath = $file->getRelativePathname();
+            $target = base_path($relativePath);
+
+            if (File::exists($target) && !in_array($relativePath, $replaceableSkeletonFiles, true)) {
+                warning("⚠ Admin frontend installation would overwrite: {$relativePath}. Existing files were left unchanged.");
+
+                return false;
+            }
+        }
+
+        foreach ($files as $file) {
             $target = base_path($file->getRelativePathname());
 
             File::ensureDirectoryExists(dirname($target));
-            File::copy($file->getPathname(), $target);
+
+            if (!File::copy($file->getPathname(), $target)) {
+                warning("⚠ Could not copy admin frontend preset file: {$file->getRelativePathname()}.");
+
+                return false;
+            }
         }
 
         note('✅ Admin panel frontend preset files published.');

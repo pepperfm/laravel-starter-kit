@@ -8,7 +8,7 @@ Laravel starter kit для PepperFM с интерактивной setup-кома
 
 ## Tech Stack
 
-- **Programming language:** PHP 8.4+
+- **Programming language:** PHP 8.5+
 - **Framework:** Laravel 13
 - **Database:** PostgreSQL 17 через Sail
 - **Cache/queue:** Redis через Sail, стандартные Laravel config files
@@ -83,4 +83,7 @@ tests/                # Pest feature and architecture tests
   - Неверно: `git checkout master && git pull`
   - Верно: сначала `git checkout master`, затем `git pull origin master`
 - Не считать Filament/Moonshine целевой архитектурой или обязательной dependency.
+- Панель в starter-stub использует UDashboardGroup/Sidebar/Navbar из Nuxt UI и Inertia/Vue. Не переносить Nuxt routing, Nitro и demo-страницы из внешнего шаблона.
+- Маршрут /panel в исходном preset пока публичный: перед продакшеном обязательны auth middleware и контроль прав. `noindex` не защищает доступ.
+- При переустановке admin preset не перезаписывать файлы пользователя. Для обновления зависимостей собирать lock-файлы заново через package manager.
 - Не писать бизнес-код во время setup-контекста; для изменений использовать `$aif-plan`, затем `$aif-implement`.
