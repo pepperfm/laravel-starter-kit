@@ -94,21 +94,19 @@ final class StarterKitPackageRegistry
                 $migrationsNeeded = true;
             }
 
-            $packageCommands = array_values(array_filter(
-                $packageCommands,
-                static function (array $command) use (&$migrationsNeeded): bool {
-                    if ($command[0] === 'migrate') {
-                        $migrationsNeeded = true;
+            $postInstallCommands = [];
+            foreach ($packageCommands as $command) {
+                if ($command[0] === 'migrate') {
+                    $migrationsNeeded = true;
+                    continue;
+                }
 
-                        return false;
-                    }
+                $postInstallCommands[] = $command;
+            }
 
-                    return true;
-                },
-            ));
 
-            if ($packageCommands !== []) {
-                $commands[$package] = $packageCommands;
+            if ($postInstallCommands !== []) {
+                $commands[$package] = $postInstallCommands;
             }
         }
 
