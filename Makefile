@@ -62,5 +62,5 @@ test:
 	./vendor/bin/sail php artisan test
 
 #check: pint lint analyze test
-check: pint test
+check: pint stan test
 style: pint-hard
