@@ -142,7 +142,7 @@ final class AdminPanelFrontendInstaller
     private function nodeInstallCommand(bool $usingSail, string $sailCommand): array
     {
         if ($usingSail) {
-            return [$sailCommand, 'exec', 'app', 'bun', 'install'];
+            return [$sailCommand, 'exec', '-T', '-u', 'sail', (string) env('APP_SERVICE', 'app'), 'bun', 'install'];
         }
 
         if ($this->hostCommandExists('bun')) {
