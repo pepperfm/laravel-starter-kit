@@ -69,3 +69,15 @@ it('uses supported Nuxt UI and Inertia versions in the admin preset', function (
         ->and($dependencies['dependencies']['@inertiajs/vue3'])->toBe('^3.9.1')
         ->and($dependencies['devDependencies']['@vitejs/plugin-vue'])->toBe('^6.0.10');
 });
+
+it('installs frontend dependencies through Sail without a TTY or root-owned files', function (): void {
+    $method = new ReflectionMethod(AdminPanelFrontendInstaller::class, 'nodeInstallCommand');
+    $cmd = $method->invoke(new AdminPanelFrontendInstaller(), true, './sail');
+
+    expect($cmd[0])->toBe('./sail')
+        ->and($cmd[1])->toBe('exec')
+        ->and($cmd[2])->toBe('-T')
+        ->and($cmd[3])->toBe('-u')
+        ->and($cmd[4])->toBe('sail')
+        ->and(array_slice($cmd, -2))->toBe(['bun', 'install']);
+});
