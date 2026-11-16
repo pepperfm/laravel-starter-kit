@@ -30,15 +30,12 @@ final class WithExceptions
                     errors: $e->errors(),
                 );
             }
-
             if ($e instanceof AuthenticationException) {
                 return self::jsonErrorResponse('Требуется авторизация', JsonResponse::HTTP_UNAUTHORIZED);
             }
-
             if ($e instanceof AuthorizationException || ($e instanceof HttpExceptionInterface && $e->getStatusCode() === 403)) {
                 return self::jsonErrorResponse('Доступ запрещён', JsonResponse::HTTP_FORBIDDEN);
             }
-
             if ($e instanceof NotFoundHttpException) {
                 return self::jsonErrorResponse('Запись не найдена', JsonResponse::HTTP_NOT_FOUND);
             }

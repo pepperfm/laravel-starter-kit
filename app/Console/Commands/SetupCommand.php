@@ -4,15 +4,21 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use Illuminate\Console\Command;
+use Illuminate\Console\Attributes\Description;
+use Illuminate\Console\Attributes\Signature;
+use Illuminate\Support\Facades\Process;
 use App\Setup\AdminPanelFrontendInstaller;
 use App\Setup\StarterKitInstallationSummary;
 use App\Setup\StarterKitPackageRegistry;
 use App\Setup\StarterKitPreset;
-use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Process;
 
 use function Laravel\Prompts\{confirm, info, multiselect, note, select, text, warning};
 
+#[Signature('starter:setup
+    {--no-post : Skip running post-install artisan commands}
+    {--preset= : Install a predefined package set: api, admin, observability, full}')]
+#[Description('Interactive setup for the PepperFM Laravel starter kit.')]
 final class SetupCommand extends Command
 {
     private const string COMMAND_RUNTIME_AUTO = 'auto';
@@ -20,12 +26,6 @@ final class SetupCommand extends Command
     private const string COMMAND_RUNTIME_HOST = 'host';
 
     private const string COMMAND_RUNTIME_SAIL = 'sail';
-
-    protected $signature = 'starter:setup
-        {--no-post : Skip running post-install artisan commands}
-        {--preset= : Install a predefined package set: api, admin, observability, full}';
-
-    protected $description = 'Interactive setup for the PepperFM Laravel starter kit.';
 
     /**
      * @var array<int, string>
