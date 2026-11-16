@@ -84,14 +84,36 @@ final class StarterKitPackageRegistry
         bool $usingSail = false,
     ): array {
         $commands = [];
+        $migrationsNeeded = false;
 
         foreach (self::normalized([...$packages, ...$devPackages]) as $packageSpec) {
             $package = self::packageName($packageSpec);
             $packageCommands = self::postInstallCommandsFor($package, $usingSail);
 
+            if ($package === 'laravel/sanctum') {
+                $migrationsNeeded = true;
+            }
+
+            $packageCommands = array_values(array_filter(
+                $packageCommands,
+                static function (array $command) use (&$migrationsNeeded): bool {
+                    if ($command[0] === 'migrate') {
+                        $migrationsNeeded = true;
+
+                        return false;
+                    }
+
+                    return true;
+                },
+            ));
+
             if ($packageCommands !== []) {
                 $commands[$package] = $packageCommands;
             }
+        }
+
+        if ($migrationsNeeded) {
+            $commands['database migrations'] = [['migrate', '--force']];
         }
 
         return $commands;
