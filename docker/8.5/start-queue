@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -e
+
+# Horizon replaces the standard worker; do not run both for the same queues.
+if [ -f /var/www/html/vendor/laravel/horizon/src/Horizon.php ]; then
+    exec /usr/bin/php -d variables_order=EGPCS /var/www/html/artisan horizon
+fi
+
+exec /usr/bin/php -d variables_order=EGPCS /var/www/html/artisan queue:work redis
