@@ -55,8 +55,8 @@ it('ignores known database placeholders', function (): void {
     expect($envValue->invoke($command, $content, 'DB_DATABASE', ['laravel_template']))->toBeNull();
 });
 
-it('installs sanctum and swagger nuxt ui when api support is selected', function (): void {
-    Prompt::fake(['y', Key::ENTER, Key::ENTER]);
+it('uses Sanctum as the default but keeps other API components optional', function (): void {
+    Prompt::fake(['y', Key::ENTER]);
 
     $command = app(SetupCommand::class);
     $askApiSupport = new ReflectionMethod($command, 'askApiSupport');
@@ -67,11 +67,7 @@ it('installs sanctum and swagger nuxt ui when api support is selected', function
     $installedPackages = new ReflectionProperty($command, 'installedPackages');
     $installedPackages->setAccessible(true);
 
-    expect($installedPackages->getValue($command))->toBe([
-        'laravel/sanctum',
-        'pepperfm/swagger-nuxt-ui-for-laravel',
-        'spatie/laravel-data',
-    ]);
+    expect($installedPackages->getValue($command))->toBe(['laravel/sanctum']);
 });
 
 it('installs selected observability packages from extras', function (): void {
@@ -193,7 +189,9 @@ it('summarizes selected post install commands without duplicates', function (): 
         ],
         'laravel/telescope' => [
             ['telescope:install'],
-            ['migrate'],
+        ],
+        'database migrations' => [
+            ['migrate', '--force'],
         ],
     ]);
 });
@@ -247,4 +245,26 @@ PHP;
     $updated = $addApiRoutes->invoke($command, $content);
 
     expect($updated)->toContain("        api: __DIR__ . '/../routes/api.php',");
+});
+
+it('runs migrations only once for multiple selected packages', function (): void {
+    $commands = StarterKitPackageRegistry::selectedPostInstallCommands(
+        packages: ['laravel/pulse', 'laravel/sanctum', 'spatie/laravel-medialibrary'],
+        devPackages: ['laravel/telescope'],
+    );
+
+    expect($commands['database migrations'])->toBe([['migrate', '--force']])
+        ->and(collect($commands)->flatten(2)->filter(fn($value) => $value === 'migrate')->count())->toBe(1);
+});
+
+it('prefers active env values and safely replaces dollar signs in passwords', function (): void {
+    $command = app(SetupCommand::class);
+    $read = new ReflectionMethod($command, 'envValue');
+    $replace = new ReflectionMethod($command, 'replaceOrAppendEnv');
+    $env = "# DB_HOST=pgsql\nDB_HOST=example.internal\nDB_PASSWORD=old";
+
+    expect($read->invoke($command, $env, 'DB_HOST'))->toBe('example.internal');
+    $updated = $replace->invoke($command, $env, 'DB_PASSWORD', 'foo$1\\bar');
+    expect($updated)->toContain('DB_PASSWORD=foo$1\\bar')
+        ->not->toContain('DB_PASSWORD=old');
 });
