@@ -5,7 +5,7 @@ LABEL maintainer="Taylor Otwell"
 ARG WWWGROUP
 ARG NODE_VERSION=24
 ARG MYSQL_CLIENT="mysql-client"
-ARG POSTGRES_VERSION=18
+ARG POSTGRES_VERSION=17
 
 WORKDIR /var/www/html
 
@@ -81,9 +81,10 @@ RUN useradd -ms /bin/bash --no-user-group -g $WWWGROUP -u 1337 sail
 RUN git config --global --add safe.directory /var/www/html
 
 COPY start-container /usr/local/bin/start-container
+COPY start-queue /usr/local/bin/start-queue
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 COPY php.ini /etc/php/8.5/cli/conf.d/99-sail.ini
-RUN chmod +x /usr/local/bin/start-container
+RUN chmod +x /usr/local/bin/start-container /usr/local/bin/start-queue
 
 EXPOSE 80/tcp
 
