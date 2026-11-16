@@ -191,7 +191,7 @@ it('summarizes selected post install commands without duplicates', function (): 
             ['telescope:install'],
         ],
         'database migrations' => [
-            ['migrate', '--force'],
+            ['migrate'],
         ],
     ]);
 });
@@ -253,7 +253,7 @@ it('runs migrations only once for multiple selected packages', function (): void
         devPackages: ['laravel/telescope'],
     );
 
-    expect($commands['database migrations'])->toBe([['migrate', '--force']])
+    expect($commands['database migrations'])->toBe([['migrate']])
         ->and(collect($commands)->flatten(2)->filter(fn($value) => $value === 'migrate')->count())->toBe(1);
 });
 
