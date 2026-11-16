@@ -11,6 +11,9 @@ class WithMiddleware
 {
     public function __invoke(Middleware $middleware): void
     {
+        // An API rate limiter is already defined in AppServiceProvider.
+        // Register it on the API middleware group when API routes are installed.
+        $middleware->api(append: ['throttle:api']);
         // Guests must never bounce back into the protected panel.
         // Other, non-panel auth routes keep their own login destination.
         $middleware->redirectGuestsTo(
