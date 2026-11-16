@@ -50,7 +50,6 @@ final class SetupCommand extends Command
         info('🔧 Laravel Starter Kit: Optional Setup');
 
         $this->askCommandRuntime();
-        $this->configureEnvironment();
 
         if (!$this->applyPresetFromOption()) {
             return self::FAILURE;
@@ -61,6 +60,7 @@ final class SetupCommand extends Command
             $this->askExtras();
         }
         if ($this->installedPackages === [] && $this->installedDevPackages === []) {
+            $this->configureEnvironment();
             note('⚠️ No packages selected for installation.');
 
             return self::SUCCESS;
@@ -74,6 +74,7 @@ final class SetupCommand extends Command
         if ($this->adminFrontendRequested && !$adminPanelFrontendInstaller->canInstall()) {
             return self::FAILURE;
         }
+        $this->configureEnvironment();
         if (!$this->prepareCommandRuntime()) {
             return self::FAILURE;
         }
