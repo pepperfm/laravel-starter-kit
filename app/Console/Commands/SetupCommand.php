@@ -49,8 +49,8 @@ final class SetupCommand extends Command
     {
         info('🔧 Laravel Starter Kit: Optional Setup');
 
-        $this->configureEnvironment();
         $this->askCommandRuntime();
+        $this->configureEnvironment();
 
         if (!$this->applyPresetFromOption()) {
             return self::FAILURE;
@@ -69,6 +69,10 @@ final class SetupCommand extends Command
             note('Setup cancelled before package installation.');
 
             return self::SUCCESS;
+        }
+        // Reject conflicting admin files before changing Composer dependencies.
+        if ($this->adminFrontendRequested && !$adminPanelFrontendInstaller->canInstall()) {
+            return self::FAILURE;
         }
         if (!$this->prepareCommandRuntime()) {
             return self::FAILURE;
@@ -152,28 +156,25 @@ final class SetupCommand extends Command
 
     protected function askApiSupport(): void
     {
-        $apiNeeded = confirm('Will this app be used as an API?', default: false);
-        if (!$apiNeeded) {
-            note('⚠️ Skipping API support installation.');
-
+        if (!confirm('Add API components?', default: false)) {
             return;
         }
 
-        info('API support: installing Sanctum and Swagger Nuxt UI documentation.');
-
-        $this->installedPackages[] = 'laravel/sanctum';
-        $this->installedPackages[] = 'pepperfm/swagger-nuxt-ui-for-laravel';
-
-        $apiChoice = select(
-            label: 'Which additional API helper package would you like to install?',
+        // These are independent choices. An API may not need authentication or Swagger;
+        // data objects and response helpers can also be installed together.
+        $choices = multiselect(
+            label: 'Choose API components',
             options: [
-                'spatie/laravel-data' => '📦 Laravel Data — data objects / DTOs',
-                'pepperfm/api-responder-for-laravel' => '📦 API Responder — lightweight response helpers',
+                'laravel/sanctum' => '🔐 Sanctum — token authentication and API routes',
+                'pepperfm/swagger-nuxt-ui-for-laravel' => '📚 Swagger Nuxt UI — API documentation',
+                'spatie/laravel-data' => '📦 Laravel Data — DTOs and validation',
+                'pepperfm/api-responder-for-laravel' => '📤 API Responder — response helpers',
             ],
-            default: 'spatie/laravel-data',
+            default: ['laravel/sanctum'],
+            required: false,
         );
 
-        $this->installedPackages[] = (string) $apiChoice;
+        array_push($this->installedPackages, ...$choices);
     }
 
     protected function askExtras(): void
@@ -187,7 +188,6 @@ final class SetupCommand extends Command
                 'laravel/telescope' => '🔭 Telescope — local debugging dashboard [dev]',
                 'laravel/pulse' => '💓 Pulse — application performance and usage metrics',
                 'defstudio/telegraph' => '🤖 Telegram Bot Integration (Telegraph)',
-                'spatie/laravel-ray' => '🛠 Ray Debugger (requires license) [dev]',
                 'spatie/laravel-medialibrary' => '🖼  Spatie MediaLibrary (file uploads)',
                 'spatie/laravel-permission' => '🔐 Spatie Permissions (roles & permissions)',
             ],
@@ -214,6 +214,13 @@ final class SetupCommand extends Command
     protected function requirePackages(array $packages, bool $dev): bool
     {
         $packages = StarterKitPackageRegistry::normalized($packages);
+        if (!$this->option('no-post')) {
+            // install:api performs its own Composer install of Sanctum.
+            $packages = array_values(array_filter(
+                $packages,
+                static fn(string $spec): bool => StarterKitPackageRegistry::packageName($spec) !== 'laravel/sanctum',
+            ));
+        }
         if ($packages === []) {
             return true;
         }
@@ -270,67 +277,58 @@ final class SetupCommand extends Command
 
     protected function runSelectedPostInstallCommands(): bool
     {
-        $all = StarterKitPackageRegistry::normalized([...$this->installedPackages, ...$this->installedDevPackages]);
-        $successful = true;
+        $commandsByPackage = StarterKitPackageRegistry::selectedPostInstallCommands(
+            packages: $this->installedPackages,
+            devPackages: $this->installedDevPackages,
+            usingSail: $this->usingSail(),
+        );
 
-        foreach ($all as $packageSpec) {
-            $package = StarterKitPackageRegistry::packageName($packageSpec);
-            $successful = $this->runPostInstallCommands($package) && $successful;
-        }
+        foreach ($commandsByPackage as $package => $commands) {
+            foreach ($commands as $cmd) {
+                // Repeating setup must not overwrite existing API routes.
+                if ($package === 'laravel/sanctum' && $cmd[0] === 'install:api'
+                    && file_exists(base_path('routes/api.php'))
+                    && class_exists(\Laravel\Sanctum\HasApiTokens::class)) {
+                    continue;
+                }
 
-        return $successful;
-    }
-
-    /*
-     * Run package-specific post-install artisan commands.
-     */
-    protected function runPostInstallCommands(string $package): bool
-    {
-        $commands = $this->postInstallCommandsForPackage($package);
-        if ($commands === []) {
-            return true;
-        }
-
-        $successful = true;
-
-        foreach ($commands as $cmd) {
-            $isSail = $this->usingSail();
-
-            $command = $isSail
-                ? array_merge([$this->getSailCommand(), 'php', 'artisan'], $cmd)
-                : array_merge(['php', 'artisan'], $cmd);
-
-            info("→ Running post-install command for $package: " . implode(' ', $command));
-
-            $process = Process::path(base_path())
-                ->timeout(600)
-                ->run($command);
-            if ($process->successful()) {
-                $this->output->write($process->output());
-
-                continue;
+                if (!$this->runArtisanCommand($cmd, $package)) {
+                    return false;
+                }
             }
 
-            warning("⚠ Post-install command failed for $package: " . implode(' ', $command));
-            $this->output->write($process->errorOutput());
-            $successful = false;
+            if ($package === 'laravel/sanctum' && (
+                !$this->ensureApiRoutesRegistered() || !$this->ensureUserModelUsesSanctumTokens()
+            )) {
+                return false;
+            }
         }
 
-        if ($package === 'laravel/sanctum' && $successful) {
-            return $this->ensureApiRoutesRegistered() && $this->ensureUserModelUsesSanctumTokens();
-        }
-
-        return $successful;
+        return true;
     }
 
     /**
-     * @param string $package
-     *
-     * @return array<int, array<int, string>>
+     * @param array<int, string> $cmd
      */
-    protected function postInstallCommandsForPackage(string $package): array
+    protected function runArtisanCommand(array $cmd, string $package): bool
     {
-        return StarterKitPackageRegistry::postInstallCommandsFor($package, usingSail: $this->usingSail());
+        $command = $this->usingSail()
+            ? [$this->getSailCommand(), 'php', 'artisan', ...$cmd]
+            : ['php', 'artisan', ...$cmd];
+
+        info("→ Running post-install command for $package: " . implode(' ', $command));
+
+        $process = Process::path(base_path())->timeout(600)->run($command);
+        if (!$process->successful()) {
+            warning("⚠ Post-install command failed for $package: " . implode(' ', $command));
+            $this->output->write($process->errorOutput());
+
+            return false;
+        }
+
+        $this->output->write($process->output());
+
+        return true;
     }
 
     protected function ensureUserModelUsesSanctumTokens(): bool
@@ -345,6 +343,13 @@ final class SetupCommand extends Command
 
         $content = (string) file_get_contents($userModelPath);
         $updated = $this->addSanctumTraitToUserModel($content);
+
+        if (!str_contains($updated, 'use Laravel\Sanctum\HasApiTokens;')
+            || !preg_match('/^    use .*\\bHasApiTokens\\b.*;$/m', $updated)) {
+            warning('⚠ Unable to update the User model with Sanctum tokens.');
+
+            return false;
+        }
 
         if ($updated === $content) {
             return true;
@@ -369,6 +374,13 @@ final class SetupCommand extends Command
 
         $content = (string) file_get_contents($bootstrapPath);
         $updated = $this->addApiRoutesToBootstrap($content);
+
+        if (!str_contains($updated, "api: __DIR__ . '/../routes/api.php'")
+            && !str_contains($updated, "api: __DIR__.'/../routes/api.php'")) {
+            warning('⚠ Unable to register routes/api.php in bootstrap/app.php.');
+
+            return false;
+        }
 
         if ($updated === $content) {
             return true;
@@ -436,8 +448,8 @@ final class SetupCommand extends Command
             label: 'Auto-detect your UID and GID for WWWUSER/WWWGROUP?',
         );
 
-        $uidDefault = function_exists('getmyuid') ? (string) getmyuid() : '1000';
-        $gidDefault = function_exists('getmygid') ? (string) getmygid() : '1000';
+        $uidDefault = function_exists('posix_getuid') ? (string) posix_getuid() : '1000';
+        $gidDefault = function_exists('posix_getgid') ? (string) posix_getgid() : '1000';
 
         $uid = $autoDetect ? $uidDefault : text('Enter your user ID (UID)', default: $uidDefault);
         $gid = $autoDetect ? $gidDefault : text('Enter your group ID (GID)', default: $gidDefault);
@@ -451,7 +463,21 @@ final class SetupCommand extends Command
         $envContent = $this->replaceOrAppendEnv($envContent, 'WWWUSER', $uid);
         $envContent = $this->replaceOrAppendEnv($envContent, 'WWWGROUP', $gid);
         $envContent = $this->replaceOrAppendEnv($envContent, 'DB_CONNECTION', 'pgsql');
-        $envContent = $this->replaceOrAppendEnv($envContent, 'DB_HOST', 'pgsql');
+        $useDockerNetwork = $this->runningInsideSail()
+            || $this->commandRuntime === self::COMMAND_RUNTIME_SAIL
+            || ($this->commandRuntime === self::COMMAND_RUNTIME_AUTO && $this->usingSail());
+        $dbHost = $this->envValue($envContent, 'DB_HOST') ?? 'pgsql';
+        $redisHost = $this->envValue($envContent, 'REDIS_HOST') ?? 'redis';
+        // Do not discard a custom remote DB/Redis host.
+        if (in_array($dbHost, ['pgsql', '127.0.0.1'], true)) {
+            $dbHost = $useDockerNetwork ? 'pgsql' : '127.0.0.1';
+        }
+        if (in_array($redisHost, ['redis', '127.0.0.1'], true)) {
+            $redisHost = $useDockerNetwork ? 'redis' : '127.0.0.1';
+        }
+
+        $envContent = $this->replaceOrAppendEnv($envContent, 'DB_HOST', $dbHost);
+        $envContent = $this->replaceOrAppendEnv($envContent, 'REDIS_HOST', $redisHost);
         $envContent = $this->replaceOrAppendEnv($envContent, 'DB_PORT', '5432');
         $envContent = $this->replaceOrAppendEnv($envContent, 'DB_DATABASE', $database);
         $envContent = $this->replaceOrAppendEnv($envContent, 'DB_USERNAME', $databaseUsername);
@@ -538,39 +564,45 @@ final class SetupCommand extends Command
 
     protected function replaceOrAppendEnv(string $content, string $key, string $value): string
     {
-        $pattern = '/^\s*#?\s*' . preg_quote($key, '/') . '=.*/m';
+        $pattern = '/^[ \t]*#?[ \t]*' . preg_quote($key, '/') . '=.*/m';
+
         if (preg_match($pattern, $content) === 1) {
-            return (string) preg_replace($pattern, "$key=$value", $content);
+            // Replace all duplicates, including commented placeholders, safely
+            // (preg_replace's replacement string interprets $ and backslashes).
+            return (string) preg_replace_callback(
+                $pattern,
+                static fn(): string => "$key=$value",
+                $content,
+            );
         }
 
-        $content = rtrim($content) . PHP_EOL;
-
-        return $content . "$key=$value" . PHP_EOL;
+        return rtrim($content) . PHP_EOL . "$key=$value" . PHP_EOL;
     }
 
     /**
      * @param array<int, string> $placeholderValues
-     * @param string $content
-     * @param string $key
      */
     protected function envValue(string $content, string $key, array $placeholderValues = []): ?string
     {
-        $pattern = '/^\s*#?\s*' . preg_quote($key, '/') . '=(.*)$/m';
-        if (preg_match($pattern, $content, $matches) !== 1) {
-            return null;
+        $quotedKey = preg_quote($key, '/');
+        // An active value must win over an old commented example.
+        foreach (['/^[ \t]*' . $quotedKey . '=(.*)$/m', '/^[ \t]*#[ \t]*' . $quotedKey . '=(.*)$/m'] as $pattern) {
+            if (preg_match($pattern, $content, $matches) !== 1) {
+                continue;
+            }
+
+            $value = trim(trim($matches[1]), "\"'");
+            if ($value === '' || strtolower($value) === 'null') {
+                continue;
+            }
+            if (in_array(strtolower($value), array_map('strtolower', $placeholderValues), true)) {
+                continue;
+            }
+
+            return $value;
         }
 
-        $value = trim($matches[1]);
-        $value = trim($value, "\"'");
-        if ($value === '' || strtolower($value) === 'null') {
-            return null;
-        }
-
-        if (in_array(strtolower($value), array_map('strtolower', $placeholderValues), true)) {
-            return null;
-        }
-
-        return $value;
+        return null;
     }
 
     protected function defaultDatabaseName(): string
