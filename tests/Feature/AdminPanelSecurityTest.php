@@ -16,7 +16,7 @@ it('ships a guarded panel with a functioning session login/logout flow', functio
         ->and($controller)
         ->toContain("auth('web')->attempt")
         ->toContain('session()->regenerate()')
-        ->toContain("Auth::guard('web')->logout()")
+        ->toContain("auth('web')->logout()")
         ->toContain('session()->invalidate()')
         ->and($middleware)->toContain("'/panel/login'")
         ->and($command)->toContain("#[Signature('panel:user')]")
