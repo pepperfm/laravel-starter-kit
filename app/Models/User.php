@@ -16,6 +16,17 @@ class User extends Authenticatable
     use HasFactory, HasUuids, Notifiable;
 
     /**
+     * Explicitly allow only the fields used when creating users.
+     *
+     * @var array<int, string>
+     */
+    protected $fillable = [
+        'name',
+        'email',
+        'password',
+    ];
+
+    /**
      * The attributes that should be hidden for serialization.
      *
      * @var array<int, string>
