@@ -22,44 +22,85 @@ final class AdminPanelFrontendInstaller
         return $this->installFrontendDependencies($usingSail, $sailCommand);
     }
 
-    private function publishPresetFiles(): bool
+    /**
+     * SHA-256 of the three pristine Laravel skeleton files this preset can replace.
+     * Customized files are never overwritten. Already published files are safe to retry.
+     *
+     * @var array<string, string>
+     */
+    private const array REPLACEABLE_SKELETON_HASHES = [
+        'package.json' => 'f528ccaa1fcffb50a4a16579408935f12ab3c5ca9167a3218e574d007fac185e',
+        'vite.config.js' => 'b79dffc57362f908a5f6a451c4c4bc1543a7f43b596300691f754f5c8b320312',
+        'resources/css/app.css' => 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+    ];
+
+    public function canInstall(): bool
     {
         $source = base_path(self::STUB_PATH);
-
         if (!File::isDirectory($source)) {
             warning('⚠ Admin panel frontend preset stubs were not found.');
 
             return false;
         }
 
-        // The frontend preset replaces a few default Laravel skeleton files on
-        // first install. Everything else must be new: never overwrite user code
-        // on a second setup run or in a partially configured application.
-        $replaceableSkeletonFiles = [
-            'package.json',
-            'vite.config.js',
-            'resources/css/app.css',
-        ];
-        $files = File::allFiles($source, true);
+        foreach (File::allFiles($source, true) as $file) {
+            $relative = $file->getRelativePathname();
+            $target = base_path($relative);
 
-        foreach ($files as $file) {
-            $relativePath = $file->getRelativePathname();
-            $target = base_path($relativePath);
-
-            if (File::exists($target) && !in_array($relativePath, $replaceableSkeletonFiles, true)) {
-                warning("⚠ Admin frontend installation would overwrite: {$relativePath}. Existing files were left unchanged.");
-
-                return false;
+            if (!File::exists($target)) {
+                continue;
             }
+
+            $targetHash = File::hash($target, 'sha256');
+            if ($targetHash === File::hash($file->getPathname(), 'sha256')) {
+                continue; // Previously published file: idempotent setup.
+            }
+
+            if ($targetHash === (self::REPLACEABLE_SKELETON_HASHES[$relative] ?? null)) {
+                continue; // Original, unmodified Laravel skeleton file.
+            }
+
+            warning("⚠ Admin frontend installation would overwrite: {$relative}. Existing files were left unchanged.");
+
+            return false;
         }
 
-        foreach ($files as $file) {
-            $target = base_path($file->getRelativePathname());
+        return true;
+    }
+
+    private function publishPresetFiles(): bool
+    {
+        if (!$this->canInstall()) {
+            return false;
+        }
+
+        $created = [];
+        $replaced = [];
+
+        foreach (File::allFiles(base_path(self::STUB_PATH), true) as $file) {
+            $relative = $file->getRelativePathname();
+            $target = base_path($relative);
+
+            if (File::exists($target)) {
+                if (File::hash($target, 'sha256') === File::hash($file->getPathname(), 'sha256')) {
+                    continue;
+                }
+
+                $replaced[$target] = File::get($target);
+            } else {
+                $created[] = $target;
+            }
 
             File::ensureDirectoryExists(dirname($target));
-
             if (!File::copy($file->getPathname(), $target)) {
-                warning("⚠ Could not copy admin frontend preset file: {$file->getRelativePathname()}.");
+                foreach ($created as $createdPath) {
+                    File::delete($createdPath);
+                }
+                foreach ($replaced as $replacedPath => $previous) {
+                    File::put($replacedPath, $previous);
+                }
+
+                warning("⚠ Could not copy admin frontend preset file: {$relative}.");
 
                 return false;
             }
