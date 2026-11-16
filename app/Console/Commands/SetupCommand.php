@@ -466,15 +466,16 @@ final class SetupCommand extends Command
         $useDockerNetwork = $this->runningInsideSail()
             || $this->commandRuntime === self::COMMAND_RUNTIME_SAIL
             || ($this->commandRuntime === self::COMMAND_RUNTIME_AUTO && $this->usingSail());
-        $dbHost = $this->envValue($envContent, 'DB_HOST') ?? 'pgsql';
-        $redisHost = $this->envValue($envContent, 'REDIS_HOST') ?? 'redis';
-        // Do not discard a custom remote DB/Redis host.
-        if (in_array($dbHost, ['pgsql', '127.0.0.1'], true)) {
-            $dbHost = $useDockerNetwork ? 'pgsql' : '127.0.0.1';
-        }
-        if (in_array($redisHost, ['redis', '127.0.0.1'], true)) {
-            $redisHost = $useDockerNetwork ? 'redis' : '127.0.0.1';
-        }
+        $dbHost = $this->resolveServiceHost(
+            $this->envValue($envContent, 'DB_HOST') ?? 'pgsql',
+            'pgsql',
+            $useDockerNetwork,
+        );
+        $redisHost = $this->resolveServiceHost(
+            $this->envValue($envContent, 'REDIS_HOST') ?? 'redis',
+            'redis',
+            $useDockerNetwork,
+        );
 
         $envContent = $this->replaceOrAppendEnv($envContent, 'DB_HOST', $dbHost);
         $envContent = $this->replaceOrAppendEnv($envContent, 'REDIS_HOST', $redisHost);
@@ -486,6 +487,15 @@ final class SetupCommand extends Command
         file_put_contents($envPath, $envContent);
 
         info("🔐 Updated .env with WWWUSER=$uid, WWWGROUP=$gid and PostgreSQL credentials.");
+    }
+
+    protected function resolveServiceHost(string $configuredHost, string $dockerHost, bool $useDockerNetwork): string
+    {
+        if (!in_array($configuredHost, [$dockerHost, '127.0.0.1'], true)) {
+            return $configuredHost;
+        }
+
+        return $useDockerNetwork ? $dockerHost : '127.0.0.1';
     }
 
     protected function askCommandRuntime(): void
