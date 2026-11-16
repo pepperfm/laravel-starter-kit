@@ -149,10 +149,8 @@ it('rejects unknown presets', function (): void {
         ]);
 });
 
-it('defines sanctum api scaffolding as a post install command', function (): void {
-    expect(StarterKitPackageRegistry::postInstallCommandsFor('laravel/sanctum'))->toBe([
-        ['install:api', '--without-migration-prompt'],
-    ]);
+it('installs Sanctum through normal Composer and scaffolds its API without nested install:api', function (): void {
+    expect(StarterKitPackageRegistry::postInstallCommandsFor('laravel/sanctum'))->toBe([]);
 });
 
 it('defines observability package post install commands', function (): void {
@@ -181,9 +179,6 @@ it('summarizes selected post install commands without duplicates', function (): 
             'laravel/telescope',
         ],
     ))->toBe([
-        'laravel/sanctum' => [
-            ['install:api', '--without-migration-prompt'],
-        ],
         'opcodesio/log-viewer' => [
             ['log-viewer:publish'],
         ],
@@ -277,4 +272,40 @@ it('resolves host and Docker database and Redis service names without rewriting 
         ->and($resolve->invoke($command, '127.0.0.1', 'pgsql', true))->toBe('pgsql')
         ->and($resolve->invoke($command, 'redis', 'redis', false))->toBe('127.0.0.1')
         ->and($resolve->invoke($command, 'remote.example', 'pgsql', false))->toBe('remote.example');
+});
+
+
+it('skips unchanged Composer requirements on repeated setup', function (): void {
+    $command = app(SetupCommand::class);
+    $method = new ReflectionMethod($command, 'missingPackages');
+
+    expect($method->invoke($command, [
+        'laravel/framework:^13.0',
+        'laravel/tinker',
+        'spatie/laravel-permission',
+        'laravel/framework:^14.0',
+    ]))->toBe([
+        'spatie/laravel-permission',
+        'laravel/framework:^14.0',
+    ]);
+});
+
+it('declares a dedicated installer hook and defers migration and Node work to Installer', function (): void {
+    $composer = json_decode((string) file_get_contents(base_path('composer.json')), true, flags: JSON_THROW_ON_ERROR);
+
+    expect($composer['extra']['laravel']['installer']['post-create-project'])->toBe([
+        '@php artisan starter:setup --installer-hook',
+    ])->and($composer['scripts']['post-create-project-cmd'])->toBe([
+        '@php scripts/post-create-project.php',
+    ]);
+});
+
+it('keeps complete scripts for manual setup and avoids install api Composer recursion', function (): void {
+    $commands = StarterKitPackageRegistry::selectedPostInstallCommands(
+        packages: ['laravel/sanctum', 'laravel/pulse'],
+        devPackages: [],
+    );
+
+    expect($commands)->not->toHaveKey('laravel/sanctum')
+        ->and($commands['database migrations'])->toBe([['migrate']]);
 });

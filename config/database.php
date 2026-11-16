@@ -4,6 +4,23 @@ declare(strict_types=1);
 
 use Illuminate\Support\Str;
 
+$sailAddress = static function (string $host, string $service): string {
+    return filter_var(env('LARAVEL_SAIL', false), FILTER_VALIDATE_BOOL)
+        && in_array($host, ['127.0.0.1', 'localhost'], true)
+        ? $service
+        : $host;
+};
+
+$sailPort = static function (string $host, string $port, string $internalPort): string {
+    return filter_var(env('LARAVEL_SAIL', false), FILTER_VALIDATE_BOOL)
+        && in_array($host, ['127.0.0.1', 'localhost'], true)
+        ? $internalPort
+        : $port;
+};
+
+$pgsqlHost = (string) env('DB_HOST', '127.0.0.1');
+$redisHost = (string) env('REDIS_HOST', '127.0.0.1');
+
 return [
 
     /*
@@ -87,8 +104,8 @@ return [
         'pgsql' => [
             'driver' => 'pgsql',
             'url' => env('DB_URL'),
-            'host' => env('DB_HOST', '127.0.0.1'),
-            'port' => env('DB_PORT', '5432'),
+            'host' => $sailAddress($pgsqlHost, 'pgsql'),
+            'port' => $sailPort($pgsqlHost, (string) env('DB_PORT', '5432'), '5432'),
             'database' => env('DB_DATABASE', 'laravel'),
             'username' => env('DB_USERNAME', 'root'),
             'password' => env('DB_PASSWORD', ''),
@@ -154,19 +171,19 @@ return [
 
         'default' => [
             'url' => env('REDIS_URL'),
-            'host' => env('REDIS_HOST', '127.0.0.1'),
+            'host' => $sailAddress($redisHost, 'redis'),
             'username' => env('REDIS_USERNAME'),
             'password' => env('REDIS_PASSWORD'),
-            'port' => env('REDIS_PORT', '6379'),
+            'port' => $sailPort($redisHost, (string) env('REDIS_PORT', '6379'), '6379'),
             'database' => env('REDIS_DB', '0'),
         ],
 
         'cache' => [
             'url' => env('REDIS_URL'),
-            'host' => env('REDIS_HOST', '127.0.0.1'),
+            'host' => $sailAddress($redisHost, 'redis'),
             'username' => env('REDIS_USERNAME'),
             'password' => env('REDIS_PASSWORD'),
-            'port' => env('REDIS_PORT', '6379'),
+            'port' => $sailPort($redisHost, (string) env('REDIS_PORT', '6379'), '6379'),
             'database' => env('REDIS_CACHE_DB', '1'),
         ],
 
