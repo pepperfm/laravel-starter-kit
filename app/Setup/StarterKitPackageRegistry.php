@@ -113,7 +113,7 @@ final class StarterKitPackageRegistry
         }
 
         if ($migrationsNeeded) {
-            $commands['database migrations'] = [['migrate', '--force']];
+            $commands['database migrations'] = [['migrate']];
         }
 
         return $commands;
