@@ -12,3 +12,11 @@ it('uses uuid primary keys for users', function (): void {
         ->and($user->getIncrementing())->toBeFalse()
         ->and($user->uniqueIds())->toBe(['id']);
 });
+
+it('only mass assigns explicit user profile fields', function (): void {
+    expect((new User())->getFillable())->toBe([
+        'name',
+        'email',
+        'password',
+    ]);
+});
