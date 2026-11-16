@@ -268,3 +268,13 @@ it('prefers active env values and safely replaces dollar signs in passwords', fu
     expect($updated)->toContain('DB_PASSWORD=foo$1\\bar')
         ->not->toContain('DB_PASSWORD=old');
 });
+
+it('resolves host and Docker database and Redis service names without rewriting custom addresses', function (): void {
+    $command = app(SetupCommand::class);
+    $resolve = new ReflectionMethod($command, 'resolveServiceHost');
+
+    expect($resolve->invoke($command, 'pgsql', 'pgsql', false))->toBe('127.0.0.1')
+        ->and($resolve->invoke($command, '127.0.0.1', 'pgsql', true))->toBe('pgsql')
+        ->and($resolve->invoke($command, 'redis', 'redis', false))->toBe('127.0.0.1')
+        ->and($resolve->invoke($command, 'remote.example', 'pgsql', false))->toBe('remote.example');
+});
