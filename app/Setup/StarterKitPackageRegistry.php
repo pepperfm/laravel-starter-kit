@@ -18,10 +18,7 @@ final class StarterKitPackageRegistry
 
     public static function isDevPackage(string $package): bool
     {
-        return in_array($package, [
-            'laravel/telescope',
-            'spatie/laravel-ray',
-        ], true);
+        return $package === 'laravel/telescope';
     }
 
     /**
@@ -53,9 +50,6 @@ final class StarterKitPackageRegistry
             'defstudio/telegraph' => [
                 ['vendor:publish', '--tag=telegraph-migrations'],
                 ['migrate'],
-            ],
-            'spatie/laravel-ray' => [
-                $usingSail ? ['ray:publish-config', '--docker'] : ['ray:publish-config'],
             ],
             'spatie/laravel-medialibrary' => [
                 ['vendor:publish', '--provider=Spatie\\MediaLibrary\\MediaLibraryServiceProvider', '--tag=medialibrary-migrations'],
