@@ -49,7 +49,7 @@ final class WithExceptions
 
             $message = $status >= 500 && !config('app.debug')
                 ? 'Внутренняя ошибка сервера'
-                : ($e->getMessage() ?: (string) JsonResponse::$statusTexts[$status] ?? 'Ошибка запроса');
+                : ($e->getMessage() ?: (JsonResponse::$statusTexts[$status] ?? 'Ошибка запроса'));
 
             return self::jsonErrorResponse($message, $status);
         });
@@ -63,18 +63,18 @@ final class WithExceptions
         int $httpStatusCode,
         array $errors = [],
     ): JsonResponse {
-        // Validation errors must remain accessible to API clients as an "errors" object.
+        if (interface_exists(\Pepperfm\ApiBaseResponder\Contracts\ResponseContract::class)) {
+            return app(\Pepperfm\ApiBaseResponder\Contracts\ResponseContract::class)
+                ->error(message: $message, httpStatusCode: $httpStatusCode, errors: $errors === [] ? null : $errors);
+        }
+
+        // Keep field-level validation errors in a predictable top-level object.
         if ($errors !== []) {
             return response()->json([
                 'data' => [],
                 'message' => $message,
                 'errors' => $errors,
             ], $httpStatusCode);
-        }
-
-        if (interface_exists(\Pepperfm\ApiBaseResponder\Contracts\ResponseContract::class)) {
-            return app(\Pepperfm\ApiBaseResponder\Contracts\ResponseContract::class)
-                ->response(data: [], message: $message, httpStatusCode: $httpStatusCode);
         }
 
         return response()->json([
