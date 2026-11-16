@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
-use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Process;
 use App\Setup\AdminPanelFrontendInstaller;
 use App\Setup\StarterKitInstallationSummary;
 use App\Setup\StarterKitPackageRegistry;
 use App\Setup\StarterKitPreset;
+use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Process;
 
 use function Laravel\Prompts\{confirm, info, multiselect, note, select, text, warning};
 
@@ -78,10 +78,8 @@ final class SetupCommand extends Command
             return self::FAILURE;
         }
 
-        $packagesInstalled = $this->requirePackages($this->installedPackages, dev: false);
-        $devPackagesInstalled = $this->requirePackages($this->installedDevPackages, dev: true);
-
-        if (!$packagesInstalled || !$devPackagesInstalled) {
+        if (!$this->requirePackages($this->installedPackages, dev: false)
+            || !$this->requirePackages($this->installedDevPackages, dev: true)) {
             warning('⚠ Setup stopped because package installation failed.');
 
             return self::FAILURE;
