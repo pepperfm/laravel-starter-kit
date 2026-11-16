@@ -42,7 +42,7 @@ enum StarterKitPreset: string
                 'laravel/horizon',
                 'laravel/pulse',
             ],
-            self::Full => self::normalized([
+            self::Full => StarterKitPackageRegistry::normalized([
                 ...self::Admin->packages(),
                 ...self::Api->packages(),
                 ...self::Observability->packages(),
@@ -69,16 +69,4 @@ enum StarterKitPreset: string
         return $this === self::Admin || $this === self::Full;
     }
 
-    /**
-     * @param array<int, string> $packages
-     *
-     * @return array<int, string>
-     */
-    private static function normalized(array $packages): array
-    {
-        return array_map('trim', $packages)
-                |> array_filter(...)
-                |> array_unique(...)
-                |> array_values(...);
-    }
 }
