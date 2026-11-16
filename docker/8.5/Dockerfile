@@ -5,7 +5,7 @@ LABEL maintainer="Taylor Otwell"
 ARG WWWGROUP
 ARG NODE_VERSION=24
 ARG MYSQL_CLIENT="mysql-client"
-ARG POSTGRES_VERSION=18
+ARG POSTGRES_VERSION=17
 
 WORKDIR /var/www/html
 
@@ -63,7 +63,6 @@ RUN apt-get update && apt-get upgrade -y \
     && npm install -g npm pnpm bun corepack \
     && corepack enable \
     && corepack prepare yarn@stable --activate \
-    && npx -y playwright install-deps \
     && curl -sS https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor | tee /etc/apt/keyrings/pgdg.gpg > /dev/null \
     && echo "deb [signed-by=/etc/apt/keyrings/pgdg.gpg] http://apt.postgresql.org/pub/repos/apt noble-pgdg main" > /etc/apt/sources.list.d/pgdg.list \
     && apt-get update \
@@ -81,9 +80,10 @@ RUN useradd -ms /bin/bash --no-user-group -g $WWWGROUP -u 1337 sail
 RUN git config --global --add safe.directory /var/www/html
 
 COPY start-container /usr/local/bin/start-container
+COPY start-queue /usr/local/bin/start-queue
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 COPY php.ini /etc/php/8.5/cli/conf.d/99-sail.ini
-RUN chmod +x /usr/local/bin/start-container
+RUN chmod +x /usr/local/bin/start-container /usr/local/bin/start-queue
 
 EXPOSE 80/tcp
 

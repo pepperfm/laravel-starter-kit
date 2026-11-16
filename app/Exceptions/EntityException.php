@@ -28,6 +28,6 @@ abstract class EntityException extends HttpException
 
     final public static function make(string $message): static
     {
-        return new static($message, ...func_get_args());
+        return new static($message);
     }
 }

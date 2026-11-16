@@ -13,7 +13,7 @@ use Illuminate\Validation\ValidationException;
  */
 final class PanelSessionController
 {
-    public function create(): \Inertia\Respone
+    public function create(): \Inertia\Response
     {
         return inertia('Panel/Login');
     }

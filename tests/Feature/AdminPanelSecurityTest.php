@@ -14,13 +14,14 @@ it('ships a guarded panel with a functioning session login/logout flow', functio
         ->toContain("->middleware('throttle:5,1')")
         ->toContain("->name('logout')")
         ->and($controller)
-        ->toContain("Auth::guard('web')->attempt")
+        ->toContain("auth('web')->attempt")
         ->toContain('session()->regenerate()')
-        ->toContain("Auth::guard('web')->logout()")
+        ->toContain("auth('web')->logout()")
         ->toContain('session()->invalidate()')
         ->and($middleware)->toContain("'/panel/login'")
-        ->and($command)->toContain('protected $signature = \'panel:user\'')
-        ->toContain('$this->secret(');
+        ->and($command)->toContain("#[Signature('panel:user')]")
+        ->toContain('$this->secret(')
+        ->and($controller)->toContain('public function create(): \\Inertia\\Response');
 });
 
 it('does not ship legacy Filament or Hasnayeen public assets', function (): void {

@@ -32,7 +32,6 @@ class AppServiceProvider extends ServiceProvider
             $url->forceScheme('https');
         }
 
-        Model::unguard();
         Model::shouldBeStrict($this->app->isLocal());
 
         RateLimiter::for(

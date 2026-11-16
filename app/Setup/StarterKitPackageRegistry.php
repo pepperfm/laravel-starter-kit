@@ -18,10 +18,7 @@ final class StarterKitPackageRegistry
 
     public static function isDevPackage(string $package): bool
     {
-        return in_array($package, [
-            'laravel/telescope',
-            'spatie/laravel-ray',
-        ], true);
+        return $package === 'laravel/telescope';
     }
 
     /**
@@ -54,9 +51,6 @@ final class StarterKitPackageRegistry
                 ['vendor:publish', '--tag=telegraph-migrations'],
                 ['migrate'],
             ],
-            'spatie/laravel-ray' => [
-                $usingSail ? ['ray:publish-config', '--docker'] : ['ray:publish-config'],
-            ],
             'spatie/laravel-medialibrary' => [
                 ['vendor:publish', '--provider=Spatie\\MediaLibrary\\MediaLibraryServiceProvider', '--tag=medialibrary-migrations'],
                 ['migrate'],
@@ -84,14 +78,34 @@ final class StarterKitPackageRegistry
         bool $usingSail = false,
     ): array {
         $commands = [];
+        $migrationsNeeded = false;
 
         foreach (self::normalized([...$packages, ...$devPackages]) as $packageSpec) {
             $package = self::packageName($packageSpec);
             $packageCommands = self::postInstallCommandsFor($package, $usingSail);
 
-            if ($packageCommands !== []) {
-                $commands[$package] = $packageCommands;
+            if ($package === 'laravel/sanctum') {
+                $migrationsNeeded = true;
             }
+
+            $postInstallCommands = [];
+            foreach ($packageCommands as $command) {
+                if ($command[0] === 'migrate') {
+                    $migrationsNeeded = true;
+                    continue;
+                }
+
+                $postInstallCommands[] = $command;
+            }
+
+
+            if ($postInstallCommands !== []) {
+                $commands[$package] = $postInstallCommands;
+            }
+        }
+
+        if ($migrationsNeeded) {
+            $commands['database migrations'] = [['migrate']];
         }
 
         return $commands;

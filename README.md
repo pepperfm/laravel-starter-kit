@@ -13,11 +13,11 @@ setup flow — ready for production-focused application work from day one.
   - Inertia 3 + Vue 3 + TypeScript
   - Nuxt UI 4 + Tailwind CSS 4 (based on Nuxt UI Dashboard primitives, without requiring Nuxt)
   - Ziggy, Vue I18n, VueUse, Valibot
-- Choose your API utility during setup:
-  - [pepperfm/api-responder-for-laravel](https://docs.pepperfm.com/api-responder-for-laravel)
-  - [spatie/laravel-data](https://github.com/spatie/laravel-data)
-- API scaffolding with [Laravel Sanctum](https://laravel.com/docs/sanctum)
-- Ready-to-use Swagger Nuxt UI docs with [pepperfm/swagger-nuxt-ui-for-laravel](https://docs.pepperfm.com/swagger-nuxt-ui-for-laravel)
+- Independently choose API components during setup (none are required together):
+  - [Laravel Sanctum](https://laravel.com/docs/sanctum) for token authentication and API routes
+  - [Swagger Nuxt UI](https://docs.pepperfm.com/swagger-nuxt-ui-for-laravel) for API documentation
+  - [spatie/laravel-data](https://github.com/spatie/laravel-data) for DTOs
+  - [pepperfm/api-responder-for-laravel](https://docs.pepperfm.com/api-responder-for-laravel) for response helpers
 - Optional observability tools during setup:
   - [OPcodes Log Viewer](https://log-viewer.opcodes.io/)
   - [Laravel Horizon](https://laravel.com/docs/horizon)
@@ -41,15 +41,15 @@ When using Sail, choose the Sail runtime during setup so containers are availabl
 After creating your project, the interactive starter:setup command will run automatically, helping you choose:
 - Whether setup commands should run on the host machine, through Sail, or auto-detect a running Sail container
 - Whether to publish the custom admin frontend foundation
-- API support packages, Sanctum, and Swagger Nuxt UI docs
-- Optional features like Log Viewer, Horizon, Telescope, Pulse, Telegram bot integration, Ray debugger, Media Library, and Permissions
+- Independent API components: Sanctum, Swagger docs, Laravel Data, API Responder
+- Optional features like Log Viewer, Horizon, Telescope, Pulse, Telegram bot integration, Media Library, and Permissions (Ray is already included in require-dev)
 - Review an installation summary before Composer, frontend, or post-install Artisan commands run
 
 You will also be prompted to configure environment variables `WWWUSER` and `WWWGROUP` for proper permissions. The setup command also normalizes the PostgreSQL `DB_*` variables so they are active after `laravel new`.
 
-If you choose Sail and the app container is not running yet, setup can start Sail with `./sail up -d --build` before installing selected packages.
+If you choose Sail and the app container is not running yet, setup can start Sail with `./sail up -d --build` before installing selected packages. Host installs use loopback DB/Redis addresses; Sail installs use Docker service names. Existing custom remote service addresses are preserved.
 
-**Admin preset notes:** The initial installation replaces the base `package.json`, `vite.config.js` and `resources/css/app.css` with the Inertia/Vue foundation. To avoid destroying work, the installer refuses to overwrite any other existing preset target (including an already installed panel). It is not a general-purpose update command for existing projects.
+**Admin preset notes:** The initial installation replaces only *unmodified* Laravel skeleton `package.json`, `vite.config.js` and `resources/css/app.css` with the Inertia/Vue foundation. The installer checks for file conflicts before installing Composer packages and refuses to overwrite customized files. Already published preset files are kept intact on repeat runs. It is not a general-purpose upgrade command.
 
 The panel is protected by Laravel session authentication. Guests visiting `/panel` are redirected to `/panel/login`; failed attempts are rate-limited, and logout invalidates the session. There is intentionally **no public sign-up**.
 
@@ -88,7 +88,7 @@ Available presets:
 
 | Preset | Includes |
 | --- | --- |
-| `api` | Sanctum, Swagger Nuxt UI docs, Spatie Laravel Data |
+| `api` | Sanctum, Swagger docs and Laravel Data (curated bundle; choose independently in interactive setup) |
 | `admin` | Custom Inertia + Vue + Nuxt UI admin frontend foundation |
 | `observability` | Log Viewer, Horizon, Pulse, Telescope as a dev dependency |
 | `full` | `admin` + `api` + `observability` |
@@ -101,11 +101,13 @@ For installed packages, the following post-install artisan commands will run aut
 | `laravel/sanctum`              | `php artisan install:api --without-migration-prompt` |
 | `opcodesio/log-viewer`          | `php artisan log-viewer:publish` |
 | `laravel/horizon`               | `php artisan horizon:install` |
-| `laravel/telescope`             | `php artisan telescope:install`<br>`php artisan migrate` |
-| `laravel/pulse`                 | `php artisan vendor:publish --provider="Laravel\Pulse\PulseServiceProvider"`<br>`php artisan migrate` |
-| `defstudio/telegraph`           | `php artisan vendor:publish --tag="telegraph-migrations"`<br>`php artisan migrate`      |
-| `spatie/laravel-medialibrary`   | `php artisan vendor:publish --provider="Spatie\MediaLibrary\MediaLibraryServiceProvider" --tag="medialibrary-migrations"`<br>`php artisan migrate` |
-| `spatie/laravel-permission`     | `php artisan vendor:publish --provider="Spatie\Permission\PermissionServiceProvider"`<br>`php artisan optimize:clear`<br>`php artisan migrate` |
+| `laravel/telescope`             | `php artisan telescope:install` |
+| `laravel/pulse`                 | `php artisan vendor:publish --provider="Laravel\Pulse\PulseServiceProvider"` |
+| `defstudio/telegraph`           | `php artisan vendor:publish --tag="telegraph-migrations"`      |
+| `spatie/laravel-medialibrary`   | `php artisan vendor:publish --provider="Spatie\MediaLibrary\MediaLibraryServiceProvider" --tag="medialibrary-migrations"` |
+| `spatie/laravel-permission`     | `php artisan vendor:publish --provider="Spatie\Permission\PermissionServiceProvider"`<br>`php artisan optimize:clear` |
+
+After publishing all selected package migrations, setup runs `php artisan migrate` **once**. The Sanctum `install:api` command also installs the Sanctum package, so Composer doesn't require it twice. Review migrations before running setup in a production environment.
 
 ---
 
