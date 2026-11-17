@@ -6,7 +6,6 @@ namespace App\Setup;
 
 use Illuminate\Support\Facades\Process;
 use Symfony\Component\Console\Output\OutputInterface;
-use Throwable;
 
 final readonly class StreamingCommandRunner
 {
@@ -50,7 +49,7 @@ final readonly class StreamingCommandRunner
             $flush('err', true);
 
             return $result->successful();
-        } catch (Throwable $exception) {
+        } catch (\Throwable $exception) {
             $flush('out', true);
             $flush('err', true);
             $this->output->writeln($this->redact($exception->getMessage(), $secrets), OutputInterface::OUTPUT_RAW);
