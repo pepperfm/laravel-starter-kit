@@ -54,6 +54,15 @@ final readonly class StarterKitInstallationSummary
         $this->writePackageSummary($command, 'Composer packages', $this->packages);
         $this->writePackageSummary($command, 'Composer dev packages', $this->devPackages);
 
+        if (!$this->skipPostInstall
+            && in_array('laravel/sanctum', array_map(StarterKitPackageRegistry::packageName(...), $this->packages), true)) {
+            $command->line('API scaffolding: routes/api.php and HasApiTokens (no nested Composer call)');
+        }
+
+        if ($command->option('installer-hook')) {
+            $command->line('Migrations and Node: deferred to Laravel Installer');
+        }
+
         if ($this->skipPostInstall) {
             $command->line('Post-install artisan commands: skipped because --no-post is enabled');
 
@@ -94,6 +103,11 @@ final readonly class StarterKitInstallationSummary
         }
 
         foreach ($this->postInstallCommands as $package => $commands) {
+            if ($package === 'database migrations' && $command->option('installer-hook')) {
+                $command->line('  - database migrations: Laravel Installer runs them after this hook');
+                continue;
+            }
+
             $command->line("  - $package:");
 
             foreach ($commands as $commandSpec) {

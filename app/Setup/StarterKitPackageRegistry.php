@@ -30,9 +30,6 @@ final class StarterKitPackageRegistry
     public static function postInstallCommandsFor(string $package, bool $usingSail = false): array
     {
         $commands = [
-            'laravel/sanctum' => [
-                ['install:api', '--without-migration-prompt'],
-            ],
             'opcodesio/log-viewer' => [
                 ['log-viewer:publish'],
             ],

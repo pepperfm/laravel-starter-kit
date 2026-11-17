@@ -32,82 +32,87 @@ setup flow — ready for production-focused application work from day one.
 
 ## 📦 Installation
 
-```bash
+Requires **PHP 8.5**, Composer, and the [Laravel Installer](https://github.com/laravel/installer).
+For Sail development, also install Docker Compose. The host must have the PostgreSQL PDO
+extension if you use the command below: Laravel Installer runs its own migrations on the host.
+
+~~~bash
 laravel new example-app --using=pepperfm/laravel-starter-kit --database=pgsql
-```
-The `--database=pgsql` flag is important: Laravel Installer defaults custom starter kits to SQLite when no database driver is specified.
-When using Sail, choose the Sail runtime during setup so containers are available for Laravel Installer's final migration step.
+~~~
 
-After creating your project, the interactive starter:setup command will run automatically, helping you choose:
-- Whether setup commands should run on the host machine, through Sail, or auto-detect a running Sail container
-- Whether to publish the custom admin frontend foundation
-- Independent API components: Sanctum, Swagger docs, Laravel Data, API Responder
-- Optional features like Log Viewer, Horizon, Telescope, Pulse, Telegram bot integration, Media Library, and Permissions (Ray is already included in require-dev)
-- Review an installation summary before Composer, frontend, or post-install Artisan commands run
+The installer creates the application and initializes its key before invoking the interactive
+`starter:setup --installer-hook` hook. In the hook you can select the host or Sail runtime,
+admin frontend, independent API components, and optional observability packages. The plan is shown
+before any project files are modified.
 
-You will also be prompted to configure environment variables `WWWUSER` and `WWWGROUP` for proper permissions. The setup command also normalizes the PostgreSQL `DB_*` variables so they are active after `laravel new`.
+**During that hook:**
 
-If you choose Sail and the app container is not running yet, setup can start Sail with `./sail up -d --build` before installing selected packages. Host installs use loopback DB/Redis addresses; Sail installs use Docker service names. Existing custom remote service addresses are preserved.
+- Optional Composer packages are installed on the **host**, before any Docker build; packages
+  already present in `composer.json` are not required again.
+- Preset files and vendor migrations are published, without running migrations yet.
+- `.env` is prepared for host connections, while `config/database.php` resolves loopback
+  PostgreSQL/Redis to service names when the application runs under Sail. Custom remote
+  hostnames/URLs and existing non-placeholder credentials are preserved.
+- If Sail is selected, Docker Compose starts after Composer and waits for service health.
+  Its full build output is streamed to the terminal.
 
-**Admin preset notes:** The initial installation replaces only *unmodified* Laravel skeleton `package.json`, `vite.config.js` and `resources/css/app.css` with the Inertia/Vue foundation. The installer checks for file conflicts before installing Composer packages and refuses to overwrite customized files. Already published preset files are kept intact on repeat runs. It is not a general-purpose upgrade command.
+**After that hook, Laravel Installer resumes:** it configures `APP_URL` and the selected
+database, runs `artisan migrate` on the host (for the explicit `--database=pgsql` flag),
+then chooses and installs/builds frontend dependencies. The starter hook deliberately does
+**not** run those stages a second time. Installer respects `--npm`, `--pnpm`,
+`--bun`, `--yarn` and `--no-node`. With no explicit package manager,
+its current lockfile detection typically chooses Bun for this repository.
 
-The panel is protected by Laravel session authentication. Guests visiting `/panel` are redirected to `/panel/login`; failed attempts are rate-limited, and logout invalidates the session. There is intentionally **no public sign-up**.
+> **Installer limitation:** `laravel new ... --database=pgsql` does not expose a
+> migration opt-out. If you need to review/decline migrations or cannot migrate from the
+> host, create the project with Composer and run `starter:setup` manually instead.
+> The starter's `--no-migrate` flag applies only to manual setup. See
+> [the lifecycle analysis](docs/INSTALLER-LIFECYCLE.md) for source references and trade-offs.
 
-After installing the admin preset, run migrations and create an initial application user with `php artisan panel:user` (the command securely prompts for a password). Then sign in at `/panel/login`. **Any authenticated application user can currently access the panel**; add roles/policies if the project requires a separate administrator role. For public deployments, configure HTTPS and secure cookie/session settings.
+The admin preset replaces only pristine Laravel skeleton `package.json`,
+`vite.config.js` and `resources/css/app.css` (plus missing files). Customized files are never
+overwritten. Re-running setup preserves existing preset files and skips already-installed Composer
+requirements. If installation stops partway through, fix the failure and run setup again; it does
+not implement transactional rollback.
 
-Frontend package constraints are refreshed for new installs. The PHP lockfile remains pinned until it is regenerated with Composer, so run `composer update -W` in a controlled environment and review its diff before releasing a refreshed template.
+The panel uses Laravel session authentication. Guests visiting `/panel` are redirected
+to `/panel/login`; failed attempts are rate-limited and logout invalidates the session.
+There is no public registration. After migrations, create the first panel user with
+`php artisan panel:user`. **Any authenticated application user can currently access the
+panel**; use policies/roles for production authorization.
 
-During setup, the selected command runtime controls:
-- Installing selected composer packages
-- Publishing selected frontend preset files and installing frontend dependencies
-- Running post-install artisan commands specific to installed packages
+## ⚙️ Manual setup
 
-If you skip Sail during setup, you can start it later:
-```bash
-chmod 755 ./sail
-./sail up -d --build
-```
-
-## ⚙️ Setup Command
-
-Run manually anytime:
-```bash
+~~~bash
 php artisan starter:setup
-```
-Interactive setup will help you customize your project features and install optional packages with their post-install steps.
-
-Preset mode is available when you want a repeatable setup path:
-```bash
 php artisan starter:setup --preset=api
 php artisan starter:setup --preset=admin
 php artisan starter:setup --preset=observability
 php artisan starter:setup --preset=full
-```
 
-Available presets:
+# Prevent post-install Artisan commands, migrations, and Node installation:
+php artisan starter:setup --preset=full --no-post --no-migrate --skip-node
+~~~
+
+Manual setup asks separately whether to run pending migrations and install frontend
+dependencies. Use `--no-migrate` or `--skip-node` to suppress those steps. A manually
+selected Sail runtime still requires host Composer, but the remaining Artisan and optional
+frontend commands run inside Sail once healthy.
 
 | Preset | Includes |
 | --- | --- |
-| `api` | Sanctum, Swagger docs and Laravel Data (curated bundle; choose independently in interactive setup) |
-| `admin` | Custom Inertia + Vue + Nuxt UI admin frontend foundation |
-| `observability` | Log Viewer, Horizon, Pulse, Telescope as a dev dependency |
-| `full` | `admin` + `api` + `observability` |
+| `api` | Sanctum, Swagger documentation and Laravel Data |
+| `admin` | Inertia + Vue + Nuxt UI panel |
+| `observability` | Log Viewer, Horizon, Pulse, Telescope (dev dependency) |
+| `full` | Admin + API + observability |
 
-## 🛠 Post-Install Commands
-For installed packages, the following post-install artisan commands will run automatically unless `--no-post` is used:
+Sanctum is installed once using Composer; `routes/api.php` and the `HasApiTokens` trait are
+set up without invoking `install:api`, which would run Composer internally.
+Horizon, Telescope, Pulse, Telegraph, MediaLibrary and Permissions publish their required
+assets/migrations before the migration stage.
 
-| Package                          | Команды                                                                                 |
-|----------------------------------|------------------------------------------------------------------------------------------|
-| `laravel/sanctum`              | `php artisan install:api --without-migration-prompt` |
-| `opcodesio/log-viewer`          | `php artisan log-viewer:publish` |
-| `laravel/horizon`               | `php artisan horizon:install` |
-| `laravel/telescope`             | `php artisan telescope:install` |
-| `laravel/pulse`                 | `php artisan vendor:publish --provider="Laravel\Pulse\PulseServiceProvider"` |
-| `defstudio/telegraph`           | `php artisan vendor:publish --tag="telegraph-migrations"`      |
-| `spatie/laravel-medialibrary`   | `php artisan vendor:publish --provider="Spatie\MediaLibrary\MediaLibraryServiceProvider" --tag="medialibrary-migrations"` |
-| `spatie/laravel-permission`     | `php artisan vendor:publish --provider="Spatie\Permission\PermissionServiceProvider"`<br>`php artisan optimize:clear` |
-
-After publishing all selected package migrations, setup runs `php artisan migrate` **once**. The Sanctum `install:api` command also installs the Sanctum package, so Composer doesn't require it twice. Review migrations before running setup in a production environment.
+For a more detailed execution map, failure behavior, and reproducible smoke tests,
+read [Installer Lifecycle](docs/INSTALLER-LIFECYCLE.md).
 
 ---
 

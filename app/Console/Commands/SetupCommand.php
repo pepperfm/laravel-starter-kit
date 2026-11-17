@@ -8,6 +8,8 @@ use Illuminate\Console\Command;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Support\Facades\Process;
+use Symfony\Component\Process\ExecutableFinder;
+use App\Setup\StreamingCommandRunner;
 use App\Setup\AdminPanelFrontendInstaller;
 use App\Setup\StarterKitInstallationSummary;
 use App\Setup\StarterKitPackageRegistry;
@@ -17,6 +19,9 @@ use function Laravel\Prompts\{confirm, info, multiselect, note, select, text, wa
 
 #[Signature('starter:setup
     {--no-post : Skip running post-install artisan commands}
+    {--no-migrate : Do not run migrations when setup is invoked manually}
+    {--skip-node : Skip frontend dependency installation in manual setup}
+    {--installer-hook : Called by Laravel Installer before its migration and Node stages}
     {--preset= : Install a predefined package set: api, admin, observability, full}')]
 #[Description('Interactive setup for the PepperFM Laravel starter kit.')]
 final class SetupCommand extends Command
@@ -54,53 +59,72 @@ final class SetupCommand extends Command
         if (!$this->applyPresetFromOption()) {
             return self::FAILURE;
         }
+
         if ($this->selectedPreset === null) {
             $this->askAdminFrontend();
             $this->askApiSupport();
             $this->askExtras();
         }
-        if ($this->installedPackages === [] && $this->installedDevPackages === []) {
-            $this->configureEnvironment();
-            note('⚠️ No packages selected for installation.');
 
-            return self::SUCCESS;
-        }
         if (!$this->confirmInstallationSummary()) {
-            note('Setup cancelled before package installation.');
+            note('Setup cancelled before changing project files.');
 
-            return self::SUCCESS;
+            // A successful hook return would let the parent Installer continue
+            // with migrations and Node even though the user cancelled.
+            return $this->option('installer-hook') ? self::FAILURE : self::SUCCESS;
         }
-        // Reject conflicting admin files before changing Composer dependencies.
+
+        // Validate everything possible before the first Composer write.
         if ($this->adminFrontendRequested && !$adminPanelFrontendInstaller->canInstall()) {
             return self::FAILURE;
         }
-        $this->configureEnvironment();
-        if (!$this->prepareCommandRuntime()) {
+        if (!$this->checkRuntimeRequirements()) {
             return self::FAILURE;
         }
 
+        // Laravel Installer itself always has Composer on the host. Do this before
+        // building a Sail image so the bind-mounted vendor directory is final.
         if (!$this->requirePackages($this->installedPackages, dev: false)
             || !$this->requirePackages($this->installedDevPackages, dev: true)) {
             warning('⚠ Setup stopped because package installation failed.');
 
             return self::FAILURE;
         }
-        if ($this->adminFrontendRequested) {
-            $adminFrontendInstalled = $adminPanelFrontendInstaller->install(
-                usingSail: $this->usingSail(),
-                sailCommand: $this->getSailCommand(),
-            );
 
-            if (!$adminFrontendInstalled) {
-                warning('⚠ Setup stopped because admin frontend installation failed.');
-
-                return self::FAILURE;
-            }
+        if ($this->adminFrontendRequested && !$adminPanelFrontendInstaller->publish()) {
+            return self::FAILURE;
         }
+        if (!$this->configureEnvironment() || !$this->prepareCommandRuntime()) {
+            return self::FAILURE;
+        }
+
         if (!$this->option('no-post') && !$this->runSelectedPostInstallCommands()) {
             warning('⚠ Setup stopped because a post-install command failed.');
 
             return self::FAILURE;
+        }
+
+        if ($this->option('installer-hook')) {
+            // In v5.33.0 NewCommand invokes the hook BEFORE its own database and
+            // package-manager stages. Never duplicate either operation here.
+            note('Installer will handle database migrations and frontend dependencies next.');
+        } else {
+            if (!$this->option('no-post') && !$this->option('no-migrate')
+                && confirm('Run pending database migrations now?', default: false)
+                && !$this->runArtisanCommand(['migrate', '--force'], 'database migrations')) {
+                return self::FAILURE;
+            }
+
+            if ($this->adminFrontendRequested && !$this->option('skip-node')
+                && getenv('LARAVEL_INSTALLER_NO_NODE') !== '1'
+                && confirm('Install admin frontend dependencies now?', default: true)
+                && !$adminPanelFrontendInstaller->installDependencies(
+                    usingSail: $this->usingSail(),
+                    sailCommand: $this->getSailCommand(),
+                    runner: $this->runner(),
+                )) {
+                return self::FAILURE;
+            }
         }
 
         note('✅ Setup complete.');
@@ -212,26 +236,13 @@ final class SetupCommand extends Command
      */
     protected function requirePackages(array $packages, bool $dev): bool
     {
-        $packages = StarterKitPackageRegistry::normalized($packages);
-        if (!$this->option('no-post')) {
-            // install:api performs its own Composer install of Sanctum.
-            $packages = array_values(array_filter(
-                $packages,
-                static fn(string $spec): bool => StarterKitPackageRegistry::packageName($spec) !== 'laravel/sanctum',
-            ));
-        }
+        $packages = $this->missingPackages(StarterKitPackageRegistry::normalized($packages));
+
         if ($packages === []) {
             return true;
         }
 
-        $isSail = $this->usingSail();
-
-        $command = $isSail
-            ? [$this->getSailCommand(), 'composer', 'require']
-            : ['composer', 'require'];
-
-        // Important: allow updating locked transitive dependencies (helps when upgrading major versions).
-        $command[] = '--with-all-dependencies';
+        $command = ['composer', 'require', '--with-all-dependencies'];
 
         if ($dev) {
             $command[] = '--dev';
@@ -241,20 +252,31 @@ final class SetupCommand extends Command
 
         info('→ Running: ' . implode(' ', $command));
 
-        $process = Process::path(base_path())
-            ->timeout(600)
-            ->run($command);
-
-        if ($process->successful()) {
-            $this->output->write($process->output());
-
+        if ($this->runner()->run($command)) {
             return true;
         }
 
         warning('⚠ Failed to install: ' . implode(', ', $packages));
-        $this->output->write($process->errorOutput());
 
         return false;
+    }
+
+    /**
+     * @param array<int, string> $packages
+     * @return array<int, string>
+     */
+    protected function missingPackages(array $packages): array
+    {
+        $composer = json_decode((string) file_get_contents(base_path('composer.json')), true);
+        $installed = array_merge($composer['require'] ?? [], $composer['require-dev'] ?? []);
+
+        return array_values(array_filter($packages, static function (string $spec) use ($installed): bool {
+            [$name, $constraint] = array_pad(explode(':', $spec, 2), 2, null);
+
+            return !isset($installed[$name])
+                || !\Composer\InstalledVersions::isInstalled($name)
+                || ($constraint !== null && $installed[$name] !== $constraint);
+        }));
     }
 
     protected function confirmInstallationSummary(): bool
@@ -276,34 +298,85 @@ final class SetupCommand extends Command
 
     protected function runSelectedPostInstallCommands(): bool
     {
+        $selected = StarterKitPackageRegistry::normalized([...$this->installedPackages, ...$this->installedDevPackages]);
+        if (in_array('laravel/sanctum', array_map(StarterKitPackageRegistry::packageName(...), $selected), true)
+            && !$this->scaffoldSanctumApi()) {
+            return false;
+        }
+
         $commandsByPackage = StarterKitPackageRegistry::selectedPostInstallCommands(
             packages: $this->installedPackages,
             devPackages: $this->installedDevPackages,
-            usingSail: $this->usingSail(),
         );
 
         foreach ($commandsByPackage as $package => $commands) {
-            foreach ($commands as $cmd) {
-                // Repeating setup must not overwrite existing API routes.
-                if ($package === 'laravel/sanctum' && $cmd[0] === 'install:api'
-                    && file_exists(base_path('routes/api.php'))
-                    && class_exists(\Laravel\Sanctum\HasApiTokens::class)) {
+            if ($package === 'database migrations') {
+                continue;
+            }
+
+            foreach ($commands as $command) {
+                if ($this->alreadyPublished($package, $command)) {
+                    info("→ Skipping previously published files for $package.");
                     continue;
                 }
 
-                if (!$this->runArtisanCommand($cmd, $package)) {
+                if (!$this->runArtisanCommand($command, $package)) {
                     return false;
                 }
-            }
-
-            if ($package === 'laravel/sanctum' && (
-                !$this->ensureApiRoutesRegistered() || !$this->ensureUserModelUsesSanctumTokens()
-            )) {
-                return false;
             }
         }
 
         return true;
+    }
+
+    protected function scaffoldSanctumApi(): bool
+    {
+        $path = base_path('routes/api.php');
+
+        if (!file_exists($path)) {
+            $content = <<<'PHP'
+<?php
+
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Route;
+
+Route::middleware('auth:sanctum')->get('/user', fn (Request $request) => $request->user());
+PHP;
+            if (file_put_contents($path, $content . PHP_EOL) === false) {
+                warning('⚠ Could not publish routes/api.php.');
+
+                return false;
+            }
+
+            info('→ Published routes/api.php without running Composer twice.');
+        }
+
+        return $this->ensureApiRoutesRegistered() && $this->ensureUserModelUsesSanctumTokens();
+    }
+
+    /**
+     * Avoid rewriting files on repeat runs. Unfinished publications are retried.
+     *
+     * @param array<int, string> $command
+     */
+    protected function alreadyPublished(string $package, array $command): bool
+    {
+        if ($command[0] === 'optimize:clear') {
+            return false;
+        }
+
+        return match ($package) {
+            'laravel/horizon' => file_exists(config_path('horizon.php')),
+            'laravel/telescope' => file_exists(config_path('telescope.php'))
+                && (array) glob(database_path('migrations/*create_telescope_entries_table.php')) !== [],
+            'laravel/pulse' => (array) glob(database_path('migrations/*create_pulse_*')) !== [],
+            'opcodesio/log-viewer' => file_exists(config_path('log-viewer.php')),
+            'defstudio/telegraph' => (array) glob(database_path('migrations/*telegraph*')) !== [],
+            'spatie/laravel-medialibrary' => (array) glob(database_path('migrations/*create_media_table.php')) !== [],
+            'spatie/laravel-permission' => file_exists(config_path('permission.php'))
+                && (array) glob(database_path('migrations/*create_permission_tables.php')) !== [],
+            default => false,
+        };
     }
 
     /**
@@ -317,17 +390,18 @@ final class SetupCommand extends Command
 
         info("→ Running post-install command for $package: " . implode(' ', $command));
 
-        $process = Process::path(base_path())->timeout(600)->run($command);
-        if (!$process->successful()) {
-            warning("⚠ Post-install command failed for $package: " . implode(' ', $command));
-            $this->output->write($process->errorOutput());
-
-            return false;
+        if ($this->runner()->run($command)) {
+            return true;
         }
 
-        $this->output->write($process->output());
+        warning("⚠ Post-install command failed for $package.");
 
-        return true;
+        return false;
+    }
+
+    protected function runner(): StreamingCommandRunner
+    {
+        return new StreamingCommandRunner($this->output);
     }
 
     protected function ensureUserModelUsesSanctumTokens(): bool
@@ -429,7 +503,7 @@ final class SetupCommand extends Command
         return $content;
     }
 
-    protected function configureEnvironment(): void
+    protected function configureEnvironment(): bool
     {
         $envPath = base_path('.env');
         $envExamplePath = base_path('.env.example');
@@ -438,54 +512,83 @@ final class SetupCommand extends Command
             copy($envExamplePath, $envPath);
         }
         if (!file_exists($envPath)) {
-            warning('⚠️ .env file not found, skipping environment configuration.');
+            warning('⚠ .env file not found; cannot configure the application.');
 
-            return;
+            return false;
         }
-
-        $autoDetect = confirm(
-            label: 'Auto-detect your UID and GID for WWWUSER/WWWGROUP?',
-        );
-
-        $uidDefault = function_exists('posix_getuid') ? (string) posix_getuid() : '1000';
-        $gidDefault = function_exists('posix_getgid') ? (string) posix_getgid() : '1000';
-
-        $uid = $autoDetect ? $uidDefault : text('Enter your user ID (UID)', default: $uidDefault);
-        $gid = $autoDetect ? $gidDefault : text('Enter your group ID (GID)', default: $gidDefault);
 
         $envContent = (string) file_get_contents($envPath);
 
-        $database = $this->envValue($envContent, 'DB_DATABASE', ['laravel', 'laravel_template']) ?? $this->defaultDatabaseName();
-        $databaseUsername = $this->envValue($envContent, 'DB_USERNAME', ['root', 'laravel_template']) ?? $database;
-        $databasePassword = $this->envValue($envContent, 'DB_PASSWORD', ['laravel_template']) ?? $database;
-
-        $envContent = $this->replaceOrAppendEnv($envContent, 'WWWUSER', $uid);
-        $envContent = $this->replaceOrAppendEnv($envContent, 'WWWGROUP', $gid);
-        $envContent = $this->replaceOrAppendEnv($envContent, 'DB_CONNECTION', 'pgsql');
-        $useDockerNetwork = $this->runningInsideSail()
-            || $this->commandRuntime === self::COMMAND_RUNTIME_SAIL
+        $needsSail = $this->commandRuntime === self::COMMAND_RUNTIME_SAIL
+            || $this->runningInsideSail()
             || ($this->commandRuntime === self::COMMAND_RUNTIME_AUTO && $this->usingSail());
-        $dbHost = $this->resolveServiceHost(
-            $this->envValue($envContent, 'DB_HOST') ?? 'pgsql',
-            'pgsql',
-            $useDockerNetwork,
-        );
-        $redisHost = $this->resolveServiceHost(
-            $this->envValue($envContent, 'REDIS_HOST') ?? 'redis',
-            'redis',
-            $useDockerNetwork,
-        );
 
-        $envContent = $this->replaceOrAppendEnv($envContent, 'DB_HOST', $dbHost);
-        $envContent = $this->replaceOrAppendEnv($envContent, 'REDIS_HOST', $redisHost);
-        $envContent = $this->replaceOrAppendEnv($envContent, 'DB_PORT', '5432');
-        $envContent = $this->replaceOrAppendEnv($envContent, 'DB_DATABASE', $database);
-        $envContent = $this->replaceOrAppendEnv($envContent, 'DB_USERNAME', $databaseUsername);
-        $envContent = $this->replaceOrAppendEnv($envContent, 'DB_PASSWORD', $databasePassword);
+        if ($needsSail) {
+            $uidDefault = function_exists('posix_getuid') ? (string) posix_getuid() : '1000';
+            $gidDefault = function_exists('posix_getgid') ? (string) posix_getgid() : '1000';
+            $autoDetect = confirm('Auto-detect your UID and GID for Sail?', default: true);
+            $uid = $autoDetect ? $uidDefault : text('Enter your user ID (UID)', default: $uidDefault);
+            $gid = $autoDetect ? $gidDefault : text('Enter your group ID (GID)', default: $gidDefault);
 
-        file_put_contents($envPath, $envContent);
+            $envContent = $this->replaceOrAppendEnv($envContent, 'WWWUSER', $uid);
+            $envContent = $this->replaceOrAppendEnv($envContent, 'WWWGROUP', $gid);
+        }
 
-        info("🔐 Updated .env with WWWUSER=$uid, WWWGROUP=$gid and PostgreSQL credentials.");
+        // NewCommand migrates on the HOST after the starter hook. Keep .env host
+        // reachable. config/database.php maps loopback to Docker service names
+        // when LARAVEL_SAIL=1. Never rewrite a custom remote DB_URL or host.
+        if ($this->envValue($envContent, 'DB_CONNECTION') === 'pgsql'
+            && $this->envValue($envContent, 'DB_URL') === null) {
+            $configuredHost = $this->envValue($envContent, 'DB_HOST') ?? '127.0.0.1';
+            $localDatabase = in_array($configuredHost, ['pgsql', '127.0.0.1', 'localhost'], true);
+            // Never treat credentials for a custom remote host as placeholders.
+            $placeholders = $localDatabase ? ['laravel_template'] : [];
+            $database = $this->envValue($envContent, 'DB_DATABASE', $placeholders)
+                ?? $this->defaultDatabaseName();
+            $username = $this->envValue($envContent, 'DB_USERNAME', $placeholders)
+                ?? $database;
+            $password = $this->envValue($envContent, 'DB_PASSWORD', $placeholders)
+                ?? $database;
+
+            $envContent = $this->replaceOrAppendEnv(
+                $envContent, 'DB_HOST', $this->resolveServiceHost(
+                    $this->envValue($envContent, 'DB_HOST') ?? '127.0.0.1', 'pgsql', false,
+                ),
+            );
+            // The installer migrates from the host; honor a non-default mapped port.
+            $dbHost = $this->envValue($envContent, 'DB_HOST');
+            $forwardDbPort = $this->envValue($envContent, 'FORWARD_DB_PORT');
+            if ($dbHost === '127.0.0.1' && $forwardDbPort !== null
+                && $this->envValue($envContent, 'DB_PORT') === '5432') {
+                $envContent = $this->replaceOrAppendEnv($envContent, 'DB_PORT', $forwardDbPort);
+            }
+
+            $envContent = $this->replaceOrAppendEnv($envContent, 'DB_DATABASE', $database);
+            $envContent = $this->replaceOrAppendEnv($envContent, 'DB_USERNAME', $username);
+            $envContent = $this->replaceOrAppendEnv($envContent, 'DB_PASSWORD', $password);
+        }
+
+        $redisHost = $this->envValue($envContent, 'REDIS_HOST');
+        if ($redisHost !== null) {
+            $resolvedRedisHost = $this->resolveServiceHost($redisHost, 'redis', false);
+            $envContent = $this->replaceOrAppendEnv($envContent, 'REDIS_HOST', $resolvedRedisHost);
+
+            $forwardRedisPort = $this->envValue($envContent, 'FORWARD_REDIS_PORT');
+            if ($resolvedRedisHost === '127.0.0.1' && $forwardRedisPort !== null
+                && $this->envValue($envContent, 'REDIS_PORT') === '6379') {
+                $envContent = $this->replaceOrAppendEnv($envContent, 'REDIS_PORT', $forwardRedisPort);
+            }
+        }
+
+        if (file_put_contents($envPath, $envContent) === false) {
+            warning('⚠ Unable to write .env.');
+
+            return false;
+        }
+
+        info('→ Local environment configured (credentials not displayed).');
+
+        return true;
     }
 
     protected function resolveServiceHost(string $configuredHost, string $dockerHost, bool $useDockerNetwork): string
@@ -515,58 +618,85 @@ final class SetupCommand extends Command
                 self::COMMAND_RUNTIME_AUTO => 'Auto-detect running Sail',
             ],
             default: $this->sailAppContainerRunning() ? self::COMMAND_RUNTIME_SAIL : self::COMMAND_RUNTIME_HOST,
-            hint: 'Controls composer, artisan and frontend dependency commands.',
+            hint: 'Composer runs on the host; this controls Artisan and manual frontend commands.',
         );
 
         $this->sailProxyAvailable = null;
     }
 
-    protected function prepareCommandRuntime(): bool
+    protected function checkRuntimeRequirements(): bool
     {
+        if ((new ExecutableFinder())->find('composer') === null) {
+            warning('⚠ Composer is required on the host by Laravel Installer and by starter:setup.');
+
+            return false;
+        }
+
         if ($this->commandRuntime !== self::COMMAND_RUNTIME_SAIL || $this->runningInsideSail()) {
             return true;
         }
+
         if (!$this->hasSailCommand()) {
             warning('⚠ Sail was selected, but the sail executable was not found.');
 
             return false;
         }
-        if ($this->sailAppContainerRunning()) {
-            return true;
+
+        try {
+            $dockerAvailable = Process::path(base_path())->timeout(10)
+                ->run(['docker', 'compose', 'version'])->successful();
+        } catch (\Throwable) {
+            $dockerAvailable = false;
         }
 
-        $shouldStartSail = confirm(
-            label: 'Sail is not running. Start Sail containers now?',
-            hint: 'Required when setup commands should run through Sail.',
-        );
-        if (!$shouldStartSail) {
-            warning('⚠ Setup stopped because Sail was selected but is not running.');
+        if (!$dockerAvailable) {
+            warning('⚠ Docker Compose is unavailable. No Composer packages have been changed.');
 
             return false;
         }
 
-        $command = [$this->getSailCommand(), 'up', '-d', '--build'];
+        if (!$this->sailAppContainerRunning() && !confirm(
+            label: 'Start Sail after installing the Composer packages?',
+            default: true,
+            hint: 'The Docker build will happen after Composer and preset file publication.',
+        )) {
+            note('Setup cancelled before changing project files.');
+
+            return false;
+        }
+
+        return true;
+    }
+
+    protected function prepareCommandRuntime(): bool
+    {
+        if ($this->runningInsideSail() || (
+            $this->commandRuntime !== self::COMMAND_RUNTIME_SAIL
+            && !($this->commandRuntime === self::COMMAND_RUNTIME_AUTO && $this->usingSail())
+        )) {
+            return true;
+        }
+
+        // --wait checks the pgsql and redis healthchecks; --progress belongs to
+        // docker compose, not to "docker compose up".
+        $command = $this->sailAppContainerRunning()
+            ? ['docker', 'compose', 'up', '-d', '--wait', '--wait-timeout', '180']
+            : ['docker', 'compose', '--progress', 'plain', 'up', '-d', '--build', '--wait', '--wait-timeout', '180'];
 
         info('→ Running: ' . implode(' ', $command));
 
-        $process = Process::path(base_path())
-            ->timeout(1200)
-            ->run($command);
-        if (!$process->successful()) {
-            warning('⚠ Failed to start Sail containers.');
-            $this->output->write($process->errorOutput());
+        if (!$this->runner()->run($command, 1200)) {
+            warning('⚠ Failed to start healthy Sail containers.');
 
             return false;
         }
 
-        $this->output->write($process->output());
         $this->sailProxyAvailable = null;
-
         if ($this->sailAppContainerRunning()) {
             return true;
         }
 
-        warning('⚠ Sail containers were started, but the app service is not running.');
+        warning('⚠ Docker Compose finished but the application container is not running.');
 
         return false;
     }
@@ -646,9 +776,13 @@ final class SetupCommand extends Command
             return false;
         }
 
-        $process = Process::path(base_path())
-            ->timeout(10)
-            ->run(['docker', 'compose', 'ps', '--services', '--filter', 'status=running']);
+        try {
+            $process = Process::path(base_path())
+                ->timeout(10)
+                ->run(['docker', 'compose', 'ps', '--services', '--filter', 'status=running']);
+        } catch (\Throwable) {
+            return false;
+        }
 
         if (!$process->successful()) {
             return false;
@@ -658,7 +792,7 @@ final class SetupCommand extends Command
                 |> (static fn($x) => array_map('trim', $x))
                 |> array_filter(...);
 
-        return in_array('app', $runningServices, true);
+        return in_array((string) env('APP_SERVICE', 'app'), $runningServices, true);
     }
 
     protected function getSailCommand(): string

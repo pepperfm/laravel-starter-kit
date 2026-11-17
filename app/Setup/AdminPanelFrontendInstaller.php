@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Setup;
 
 use Illuminate\Support\Facades\File;
-use Illuminate\Support\Facades\Process;
+use Symfony\Component\Process\ExecutableFinder;
 
 use function Laravel\Prompts\{info, note, warning};
 
@@ -13,13 +13,42 @@ final class AdminPanelFrontendInstaller
 {
     private const STUB_PATH = 'stubs/admin-panel';
 
-    public function install(bool $usingSail, string $sailCommand): bool
+    public function publish(): bool
     {
-        if (!$this->publishPresetFiles()) {
+        return $this->publishPresetFiles();
+    }
+
+    public function installDependencies(bool $usingSail, string $sailCommand, StreamingCommandRunner $runner): bool
+    {
+        $command = $this->nodeInstallCommand($usingSail, $sailCommand);
+
+        info('→ Running: ' . implode(' ', $command));
+
+        if (!$usingSail && !$this->hostCommandExists($command[0])) {
+            warning("⚠ Package manager {$command[0]} is not available on the host. Use Sail or install it first.");
+
             return false;
         }
 
-        return $this->installFrontendDependencies($usingSail, $sailCommand);
+        if (!$runner->run($command)) {
+            warning('⚠ Failed to install admin frontend dependencies.');
+
+            return false;
+        }
+
+        $build = $usingSail
+            ? [$sailCommand, 'exec', '-T', '-u', 'sail', (string) env('APP_SERVICE', 'app'), $command[count($command) - 2], 'run', 'build']
+            : [$command[0], 'run', 'build'];
+
+        info('→ Running: ' . implode(' ', $build));
+
+        if (!$runner->run($build)) {
+            warning('⚠ Failed to build admin frontend assets.');
+
+            return false;
+        }
+
+        return true;
     }
 
     /**
@@ -41,6 +70,10 @@ final class AdminPanelFrontendInstaller
             warning('⚠ Admin panel frontend preset stubs were not found.');
 
             return false;
+        }
+
+        if ($this->previouslyPublished()) {
+            return true;
         }
 
         foreach (File::allFiles($source, true) as $file) {
@@ -72,6 +105,12 @@ final class AdminPanelFrontendInstaller
     {
         if (!$this->canInstall()) {
             return false;
+        }
+
+        if ($this->previouslyPublished()) {
+            note('Admin frontend already installed; preserving existing customizations.');
+
+            return true;
         }
 
         $created = [];
@@ -111,52 +150,60 @@ final class AdminPanelFrontendInstaller
         return true;
     }
 
-    private function installFrontendDependencies(bool $usingSail, string $sailCommand): bool
+    /**
+     * A complete existing admin installation is not a file-conflict error, even
+     * when its files were subsequently customized by the application owner.
+     */
+    private function previouslyPublished(): bool
     {
-        $command = $this->nodeInstallCommand($usingSail, $sailCommand);
-
-        info('→ Running: ' . implode(' ', $command));
-
-        $process = Process::path(base_path())
-            ->timeout(600)
-            ->run($command);
-
-        if ($process->successful()) {
-            echo $process->output();
-
-            return true;
+        if (!is_file(config_path('panel.php')) || !is_file(base_path('routes/panel.php'))
+            || !is_file(base_path('resources/js/app.ts')) || !is_file(base_path('package.json'))) {
+            return false;
         }
 
-        warning('⚠ Failed to install admin frontend dependencies.');
-        echo $process->errorOutput();
+        $package = json_decode((string) file_get_contents(base_path('package.json')), true);
 
-        return false;
+        if (!isset($package['dependencies']['@nuxt/ui'], $package['dependencies']['@inertiajs/vue3'])) {
+            return false;
+        }
+
+        foreach (File::allFiles(base_path(self::STUB_PATH), true) as $file) {
+            if (!File::exists(base_path($file->getRelativePathname()))) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
-     * @param bool $usingSail
-     * @param string $sailCommand
-     *
      * @return array<int, string>
      */
     private function nodeInstallCommand(bool $usingSail, string $sailCommand): array
     {
+        $manager = $this->determinePackageManager();
+
         if ($usingSail) {
-            return [$sailCommand, 'exec', '-T', '-u', 'sail', (string) env('APP_SERVICE', 'app'), 'bun', 'install'];
+            return [$sailCommand, 'exec', '-T', '-u', 'sail', (string) env('APP_SERVICE', 'app'), $manager, 'install'];
         }
 
-        if ($this->hostCommandExists('bun')) {
-            return ['bun', 'install'];
-        }
+        return [$manager, 'install'];
+    }
 
-        return ['npm', 'install'];
+    private function determinePackageManager(): string
+    {
+        $manager = match (true) {
+            file_exists(base_path('pnpm-lock.yaml')) => 'pnpm',
+            file_exists(base_path('bun.lock')), file_exists(base_path('bun.lockb')) => 'bun',
+            file_exists(base_path('yarn.lock')) => 'yarn',
+            default => 'npm',
+        };
+
+        return $manager;
     }
 
     private function hostCommandExists(string $command): bool
     {
-        return Process::path(base_path())
-            ->timeout(10)
-            ->run(['which', $command])
-            ->successful();
+        return (new ExecutableFinder())->find($command) !== null;
     }
 }

@@ -2,7 +2,11 @@
     "name": "pepperfm/laravel-starter-kit",
     "type": "project",
     "description": "The skeleton application for the Laravel framework.",
-    "keywords": ["laravel", "framework", "starter"],
+    "keywords": [
+        "laravel",
+        "framework",
+        "starter"
+    ],
     "license": "MIT",
     "require": {
         "php": "^8.5",
@@ -53,8 +57,7 @@
             "@php -r \"file_exists('.env') || copy('.env.example', '.env');\""
         ],
         "post-create-project-cmd": [
-            "@php artisan key:generate --ansi",
-            "@php -r \"file_exists('database/database.sqlite') || touch('database/database.sqlite');\""
+            "@php scripts/post-create-project.php"
         ]
     },
     "extra": {
@@ -62,7 +65,7 @@
             "dont-discover": [],
             "installer": {
                 "post-create-project": [
-                    "@php artisan starter:setup"
+                    "@php artisan starter:setup --installer-hook"
                 ]
             }
         }
