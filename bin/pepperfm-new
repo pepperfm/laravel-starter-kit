@@ -60,6 +60,19 @@ function askPort(string $question, int $default): int
     }
 }
 
+function commandAvailable(string $name): bool
+{
+    $paths = explode(PATH_SEPARATOR, (string) getenv('PATH'));
+
+    foreach ($paths as $dir) {
+        if ($dir !== '' && is_executable(rtrim($dir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $name)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 /**
  * Restore choices after Laravel Installer's built-in .env rewriting.
  * The example file gets local-development placeholders, not host secrets.
@@ -88,7 +101,7 @@ function finalizeEnvironment(string $file, array $config, string $projectName, b
                 : $config['db_port'],
             'DB_DATABASE' => $example ? $projectName : $config['db_name'],
             'DB_USERNAME' => $example
-                ? ($config['runtime'] === 'sail' ? $projectName : 'postgres')
+                ? ($config['runtime'] === 'sail' ? $projectName : ($config['database'] === 'pgsql' ? 'postgres' : 'root'))
                 : $config['db_user'],
             'DB_PASSWORD' => $example
                 ? ($config['runtime'] === 'sail' ? $projectName : '')
@@ -229,7 +242,9 @@ try {
 
     if ($database !== 'sqlite') {
         $dbName = ask('Database name', $normalizedName);
-        $dbUser = ask('Database user', $runtime === 'sail' ? $normalizedName : 'postgres');
+        $dbUser = ask('Database user', $runtime === 'sail'
+            ? $normalizedName
+            : ($database === 'pgsql' ? 'postgres' : 'root'));
         $dbPassword = ask('Database password (visible input; local development only)', $runtime === 'sail' ? $normalizedName : '');
         $nativePort = $database === 'pgsql' ? 5432 : 3306;
 
@@ -292,6 +307,32 @@ try {
     if (strtolower(ask('Continue? (Y/n)', 'Y')) === 'n') {
         fwrite(STDOUT, "Cancelled before creating project files.\n");
         exit(0);
+    }
+
+    if (PHP_VERSION_ID < 80500) {
+        throw new RuntimeException('The starter requires PHP 8.5+ in the host CLI.');
+    }
+
+    if (!commandAvailable('laravel')) {
+        throw new RuntimeException('Laravel Installer is not on PATH (composer global require laravel/installer).');
+    }
+
+    if ($manager !== 'skip' && !commandAvailable($manager)) {
+        throw new RuntimeException("Selected package manager $manager is not on PATH.");
+    }
+
+    $pdoExtension = match ($database) {
+        'pgsql' => 'pdo_pgsql',
+        'mysql', 'mariadb' => 'pdo_mysql',
+        'sqlite' => 'pdo_sqlite',
+    };
+
+    if (!extension_loaded($pdoExtension)) {
+        throw new RuntimeException("Host PHP is missing $pdoExtension, required by Laravel Installer migrations.");
+    }
+
+    if (!extension_loaded('redis')) {
+        throw new RuntimeException('Host PHP is missing ext-redis; the starter uses phpredis.');
     }
 
     $environment = getenv();
