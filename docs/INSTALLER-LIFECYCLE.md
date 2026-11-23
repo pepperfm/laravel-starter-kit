@@ -25,6 +25,25 @@ References in `NewCommand.php` v5.33.0: `execute()` lines 630–760;
 `runInstallerHooks()` ~1386–1401. Direct verification is important when
 upgrading the globally installed Laravel Installer.
 
+## Interactive launcher (recommended)
+
+`bin/pepperfm-new` is a standalone PHP entrypoint, installed separately
+from the project skeleton. It prompts before invoking Laravel Installer, passes
+explicit `--database` and Node manager flags, and provides a
+`PEPPERFM_NEW_CONFIG` JSON environment value for the starter hook. The hook
+uses it to set `.env` values before Sail starts, and uses the selected runtime
+without asking twice. The launcher reapplies the APP_URL after Installer's
+own finalization step.
+
+For Sail the template uses a Compose `pgsql` profile so a SQLite project
+does not run an unnecessary PostgreSQL container. `COMPOSE_PROFILES=pgsql`
+is the default in `.env.example`, and the launcher sets it to empty for
+Sail SQLite projects. Sail PostgreSQL still requires PDO PostgreSQL on the
+host because Installer migrates from the host.
+
+Without the launcher, the original `laravel new --using=...` flow is still
+supported and retains its upstream defaults and limitations.
+
 ## Ownership and runtime boundaries
 
 **Composer:** Laravel Installer's initial `composer create-project` always runs on

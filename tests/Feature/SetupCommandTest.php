@@ -321,3 +321,95 @@ it('keeps complete scripts for manual setup and avoids install api Composer recu
     expect($commands)->not->toHaveKey('laravel/sanctum')
         ->and($commands['database migrations'])->toBe([['migrate']]);
 });
+
+it('honors the standalone launcher's PostgreSQL and Sail environment settings', function (): void {
+    $previous = getenv('PEPPERFM_NEW_CONFIG');
+
+    try {
+        putenv('PEPPERFM_NEW_CONFIG=' . json_encode([
+            'runtime' => 'sail',
+            'database' => 'pgsql',
+            'manager' => 'bun',
+            'app_url' => 'http://localhost:8080',
+            'db_host' => '127.0.0.1',
+            'db_port' => '5433',
+            'db_name' => 'sample_db',
+            'db_user' => 'sample_user',
+            'db_password' => 'test_pass',
+            'db_forward_port' => '5433',
+            'app_port' => '8080',
+            'redis_port' => '6380',
+        ], JSON_THROW_ON_ERROR));
+
+        $apply = new ReflectionMethod(SetupCommand::class, 'applyLauncherEnvironment');
+        $content = $apply->invoke(app(SetupCommand::class), implode(PHP_EOL, [
+            'APP_URL=http://localhost',
+            'DB_CONNECTION=pgsql',
+            'DB_HOST=127.0.0.1',
+            'DB_PORT=5432',
+            'DB_DATABASE=laravel_template',
+            'DB_USERNAME=laravel_template',
+            'DB_PASSWORD=laravel_template',
+            'REDIS_PORT=6379',
+        ]));
+
+        expect($content)->toContain('APP_URL=http://localhost:8080')
+            ->toContain('DB_CONNECTION=pgsql')
+            ->toContain('DB_PORT=5433')
+            ->toContain('FORWARD_DB_PORT=5433')
+            ->toContain('DB_DATABASE=sample_db')
+            ->toContain('DB_USERNAME=sample_user')
+            ->toContain('DB_PASSWORD=test_pass')
+            ->toContain('APP_PORT=8080')
+            ->toContain('REDIS_PORT=6380')
+            ->toContain('FORWARD_REDIS_PORT=6380')
+            ->toContain('COMPOSE_PROFILES=pgsql');
+    } finally {
+        $previous === false ? putenv('PEPPERFM_NEW_CONFIG') : putenv('PEPPERFM_NEW_CONFIG=' . $previous);
+    }
+});
+
+it('uses the default SQLite database path when selected through the launcher', function (): void {
+    $previous = getenv('PEPPERFM_NEW_CONFIG');
+
+    try {
+        putenv('PEPPERFM_NEW_CONFIG=' . json_encode([
+            'runtime' => 'sail',
+            'database' => 'sqlite',
+            'app_url' => 'http://localhost:8080',
+            'app_port' => '8080',
+            'redis_port' => '6380',
+        ], JSON_THROW_ON_ERROR));
+
+        $apply = new ReflectionMethod(SetupCommand::class, 'applyLauncherEnvironment');
+        $content = $apply->invoke(app(SetupCommand::class), implode(PHP_EOL, [
+            'DB_CONNECTION=pgsql',
+            'DB_HOST=127.0.0.1',
+            'DB_PORT=5432',
+            'DB_DATABASE=laravel_template',
+            'DB_USERNAME=laravel_template',
+            'DB_PASSWORD=laravel_template',
+        ]));
+
+        expect($content)->toContain('DB_CONNECTION=sqlite')
+            ->toContain('# DB_HOST=127.0.0.1')
+            ->toContain('# DB_DATABASE=laravel_template')
+            ->not->toMatch('/^DB_DATABASE=/m')
+            ->toContain('COMPOSE_PROFILES=');
+    } finally {
+        $previous === false ? putenv('PEPPERFM_NEW_CONFIG') : putenv('PEPPERFM_NEW_CONFIG=' . $previous);
+    }
+});
+
+it('dry-runs the independent launcher without starting Laravel Installer', function (): void {
+    $process = new \Symfony\Component\Process\Process(
+        [PHP_BINARY, base_path('bin/pepperfm-new'), 'example-app', '--dry-run'],
+        base_path(),
+    );
+    $process->setInput("1\n1\n1\n\n\n\n\n\n\n");
+    $process->run();
+
+    expect($process->isSuccessful())->toBeTrue()
+        ->and($process->getOutput())->toContain('--database=pgsql --bun')
+        ->toContain('Dry run: no project created.');
+});

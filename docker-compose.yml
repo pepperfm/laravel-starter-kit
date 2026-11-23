@@ -22,10 +22,11 @@ services:
         networks:
             - sail
         depends_on:
-            - pgsql
             - redis
 
     pgsql:
+        profiles:
+            - pgsql
         image: 'postgres:17'
         ports:
             - '${FORWARD_DB_PORT:-5432}:5432'

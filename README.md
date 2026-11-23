@@ -32,6 +32,41 @@ setup flow — ready for production-focused application work from day one.
 
 ## 📦 Installation
 
+For an interactive installation that configures Host/Sail, the database, frontend
+package manager, and real APP_URL **before** Laravel Installer runs, use the
+standalone `pepperfm-new` launcher:
+
+```bash
+mkdir -p "$HOME/.local/bin"
+curl -fsSL https://raw.githubusercontent.com/pepperfm/laravel-starter-kit/master/bin/pepperfm-new \
+  -o "$HOME/.local/bin/pepperfm-new"
+chmod +x "$HOME/.local/bin/pepperfm-new"
+"$HOME/.local/bin/pepperfm-new" example-app
+```
+
+The launcher is a small PHP CLI (no Composer dependencies) that prompts once
+for the runtime (Host/Sail), supported database, frontend package manager, and
+app URL. It passes explicit database and Node flags to Laravel Installer, and
+passes runtime/database connection details to the existing `starter:setup`
+hook. Installer then handles migrations and frontend build once. The hook does
+not repeat its runtime question when invoked by the launcher.
+
+Supported database choices: **Host:** PostgreSQL, MySQL, MariaDB, SQLite;
+**Sail:** PostgreSQL and SQLite. Sail PostgreSQL and Redis use independently
+configurable forwarded ports (initial suggestions 5433/6380), while the web
+server defaults to host port 8080. With Sail SQLite, the PostgreSQL service
+is not started. The launcher does **not** create a host database: provision
+that database and its credentials before migrations. The Laravel Installer
+still executes migrations and Node commands on the host in both runtime modes,
+so the chosen PDO extension and frontend manager must exist on the host.
+
+For development on Flock, enter the actual local domain at the APP_URL
+prompt. For `php artisan serve`, `http://localhost:8000` is appropriate.
+The launcher restores your explicit URL after Laravel Installer finishes.
+For a non-destructive preview, use `pepperfm-new example-app --dry-run`.
+
+You can still invoke Laravel Installer directly without the launcher:
+
 Requires **PHP 8.5**, Composer, and the [Laravel Installer](https://github.com/laravel/installer).
 For Sail development, also install Docker Compose. The host must have the PostgreSQL PDO
 extension if you use the command below: Laravel Installer runs its own migrations on the host.

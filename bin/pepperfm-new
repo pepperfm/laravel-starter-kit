@@ -1,0 +1,263 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+/**
+ * Standalone interactive entrypoint for Laravel Installer.
+ * No framework dependencies: this runs before the application exists.
+ */
+const STARTER_KIT = 'pepperfm/laravel-starter-kit';
+
+function ask(string $question, string $default = ''): string
+{
+    $suffix = $default !== '' ? " [$default]" : '';
+    fwrite(STDOUT, "$question$suffix: ");
+    $answer = fgets(STDIN);
+
+    if ($answer === false) {
+        throw new RuntimeException('Interactive input ended unexpectedly.');
+    }
+
+    return trim($answer) ?: $default;
+}
+
+/**
+ * @param array<string, string> $options
+ */
+function choose(string $question, array $options, string $default): string
+{
+    $keys = array_keys($options);
+    $defaultIndex = array_search($default, $keys, true);
+
+    while (true) {
+        fwrite(STDOUT, PHP_EOL . $question . PHP_EOL);
+
+        foreach ($keys as $i => $key) {
+            fwrite(STDOUT, sprintf("  %d. %s%s\n", $i + 1, $options[$key], $key === $default ? ' (default)' : ''));
+        }
+
+        $value = ask('Choose an option', (string) ($defaultIndex + 1));
+
+        if (ctype_digit($value) && isset($keys[(int) $value - 1])) {
+            return $keys[(int) $value - 1];
+        }
+
+        fwrite(STDERR, "Invalid choice.\n");
+    }
+}
+
+function askPort(string $question, int $default): int
+{
+    while (true) {
+        $value = ask($question, (string) $default);
+
+        if (ctype_digit($value) && (int) $value >= 1 && (int) $value <= 65535) {
+            return (int) $value;
+        }
+
+        fwrite(STDERR, "Port must be between 1 and 65535.\n");
+    }
+}
+
+/** @param array<string, mixed> $config */
+function updateApplicationUrl(string $file, array $config): void
+{
+    if (!is_file($file)) {
+        throw new RuntimeException("Installer did not create $file");
+    }
+
+    $content = (string) file_get_contents($file);
+    $line = 'APP_URL=' . $config['app_url'];
+    $updated = preg_replace_callback(
+        '/^APP_URL=.*$/m',
+        static fn (): string => $line,
+        $content,
+        1,
+        $count,
+    );
+
+    if ($count === 0) {
+        $updated = rtrim($content) . PHP_EOL . $line . PHP_EOL;
+    }
+
+    if ($updated === null || file_put_contents($file, $updated) === false) {
+        throw new RuntimeException("Could not update $file");
+    }
+}
+
+try {
+    if (PHP_SAPI !== 'cli') {
+        throw new RuntimeException('Run this command from a terminal.');
+    }
+
+    $arguments = array_slice($argv, 1);
+    $dryRun = in_array('--dry-run', $arguments, true);
+    $arguments = array_values(array_filter($arguments, static fn (string $arg): bool => $arg !== '--dry-run'));
+
+    if (in_array('--help', $arguments, true) || in_array('-h', $arguments, true)) {
+        fwrite(STDOUT, "Usage: pepperfm-new [project-name] [--dry-run]\n\nInteractive setup for " . STARTER_KIT . ".\n");
+        exit(0);
+    }
+
+    if (count($arguments) > 1 || (isset($arguments[0]) && str_starts_with($arguments[0], '-'))) {
+        throw new RuntimeException('Usage: pepperfm-new [project-name] [--dry-run]');
+    }
+
+    $name = $arguments[0] ?? ask('Project directory name');
+
+    if (!preg_match('/^[A-Za-z0-9][A-Za-z0-9._-]*$/D', $name) || in_array($name, ['.', '..'], true)) {
+        throw new RuntimeException('Project name must be a safe directory name (letters, digits, dots, underscores, dashes).');
+    }
+
+    $cwd = getcwd();
+    if ($cwd === false) {
+        throw new RuntimeException('Could not determine current directory.');
+    }
+
+    $directory = $cwd . DIRECTORY_SEPARATOR . $name;
+    if (file_exists($directory)) {
+        throw new RuntimeException("Directory $name already exists. Use a new directory or remove the unfinished one.");
+    }
+
+    fwrite(STDOUT, "PepperFM Laravel Starter Kit\n");
+
+    $runtime = choose('Where will the application run?', [
+        'host' => 'Host (Flock or other local services)',
+        'sail' => 'Laravel Sail (Docker)',
+    ], 'host');
+
+    $database = choose('Database driver', $runtime === 'sail'
+        ? [
+            'pgsql' => 'PostgreSQL (Sail service)',
+            'sqlite' => 'SQLite (file, no database container)',
+        ]
+        : [
+            'pgsql' => 'PostgreSQL',
+            'mysql' => 'MySQL',
+            'mariadb' => 'MariaDB',
+            'sqlite' => 'SQLite',
+        ], 'pgsql');
+
+    $manager = choose('Frontend package manager', [
+        'bun' => 'Bun',
+        'npm' => 'npm',
+        'pnpm' => 'pnpm',
+        'yarn' => 'Yarn',
+        'skip' => 'Skip Node dependencies and frontend build',
+    ], 'bun');
+
+    $normalizedName = strtolower(str_replace(['-', '.'], '_', $name));
+    $dbHost = '127.0.0.1';
+    $dbName = '';
+    $dbUser = '';
+    $dbPassword = '';
+    $dbPort = 0;
+    $dbForwardPort = 0;
+    $appPort = 0;
+    $redisPort = 0;
+
+    if ($database !== 'sqlite') {
+        $dbName = ask('Database name', $normalizedName);
+        $dbUser = ask('Database user', $runtime === 'sail' ? $normalizedName : 'postgres');
+        $dbPassword = ask('Database password (visible input; local development only)', $runtime === 'sail' ? $normalizedName : '');
+        $nativePort = $database === 'pgsql' ? 5432 : 3306;
+
+        if ($runtime === 'sail') {
+            $dbForwardPort = askPort('Host port forwarded to Sail database', 5433);
+            $dbPort = $dbForwardPort;
+        } else {
+            $dbHost = ask('Database host', '127.0.0.1');
+            $dbPort = askPort('Database port', $nativePort);
+        }
+    }
+
+    if ($runtime === 'sail') {
+        $appPort = askPort('Host port for the Sail web server', 8080);
+        $redisPort = askPort('Host port forwarded to Sail Redis', 6380);
+    }
+
+    $appUrl = ask('APP_URL', $runtime === 'sail'
+        ? 'http://localhost:' . $appPort
+        : 'http://localhost:8000');
+
+    if (!filter_var($appUrl, FILTER_VALIDATE_URL) || !in_array(parse_url($appUrl, PHP_URL_SCHEME), ['http', 'https'], true)) {
+        throw new RuntimeException('APP_URL must be a valid HTTP(S) URL.');
+    }
+
+    $config = [
+        'runtime' => $runtime,
+        'database' => $database,
+        'manager' => $manager,
+        'app_url' => $appUrl,
+        'db_host' => $dbHost,
+        'db_port' => (string) $dbPort,
+        'db_name' => $dbName,
+        'db_user' => $dbUser,
+        'db_password' => $dbPassword,
+        'db_forward_port' => (string) $dbForwardPort,
+        'app_port' => (string) $appPort,
+        'redis_port' => (string) $redisPort,
+    ];
+
+    $command = [
+        'laravel', 'new', $name,
+        '--using=' . STARTER_KIT,
+        '--database=' . $database,
+        $manager === 'skip' ? '--no-node' : '--' . $manager,
+    ];
+
+    fwrite(STDOUT, PHP_EOL . "Installation summary:\n");
+    fwrite(STDOUT, "  Runtime: $runtime\n  Database: $database\n  Frontend: $manager\n  APP_URL: $appUrl\n");
+    if ($database !== 'sqlite') {
+        fwrite(STDOUT, "  Database: $dbHost:$dbPort / $dbName (user $dbUser)\n");
+    }
+    fwrite(STDOUT, '  Laravel Installer: ' . implode(' ', $command) . PHP_EOL);
+
+    if ($dryRun) {
+        fwrite(STDOUT, "Dry run: no project created.\n");
+        exit(0);
+    }
+
+    if (strtolower(ask('Continue? (Y/n)', 'Y')) === 'n') {
+        fwrite(STDOUT, "Cancelled before creating project files.\n");
+        exit(0);
+    }
+
+    $environment = getenv();
+    if (!is_array($environment)) {
+        $environment = [];
+    }
+    $environment['PEPPERFM_NEW_CONFIG'] = json_encode($config, JSON_THROW_ON_ERROR);
+
+    $process = proc_open(
+        $command,
+        [0 => STDIN, 1 => STDOUT, 2 => STDERR],
+        $pipes,
+        $cwd,
+        $environment,
+    );
+
+    if (!is_resource($process)) {
+        throw new RuntimeException('Unable to start Laravel Installer.');
+    }
+
+    $exitCode = proc_close($process);
+
+    if ($exitCode !== 0) {
+        fwrite(STDERR, "Laravel Installer failed (exit code $exitCode). Project files were not removed.\n");
+        exit($exitCode > 0 ? $exitCode : 1);
+    }
+
+    updateApplicationUrl($directory . '/.env', $config);
+    updateApplicationUrl($directory . '/.env.example', $config);
+
+    fwrite(STDOUT, "\nProject created with APP_URL=$appUrl.\n");
+
+    if ($manager !== 'skip' && !is_file($directory . '/public/build/manifest.json')) {
+        fwrite(STDERR, "Warning: Vite build manifest not found. Review frontend installer output.\n");
+    }
+} catch (Throwable $exception) {
+    fwrite(STDERR, 'Error: ' . $exception->getMessage() . PHP_EOL);
+    exit(1);
+}

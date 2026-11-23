@@ -592,6 +592,8 @@ PHP;
             }
         }
 
+        $envContent = $this->applyLauncherEnvironment($envContent);
+
         if (file_put_contents($envPath, $envContent) === false) {
             warning('⚠ Unable to write .env.');
 
@@ -601,6 +603,101 @@ PHP;
         info('→ Local environment configured (credentials not displayed).');
 
         return true;
+    }
+
+    /**
+     * A standalone launcher supplies choices before Laravel Installer starts.
+     * The hook cannot alter the parent command's --database/--bun options.
+     *
+     * @return array<string, string>|null
+     */
+    protected function launcherConfig(): ?array
+    {
+        $encoded = getenv('PEPPERFM_NEW_CONFIG');
+        if (!is_string($encoded) || $encoded === '') {
+            return null;
+        }
+
+        $config = json_decode($encoded, true);
+        if (!is_array($config)
+            || !in_array($config['runtime'] ?? null, ['host', 'sail'], true)
+            || !in_array($config['database'] ?? null, ['pgsql', 'mysql', 'mariadb', 'sqlite'], true)
+            || !is_string($config['app_url'] ?? null)
+            || !filter_var($config['app_url'], FILTER_VALIDATE_URL)) {
+            throw new \InvalidArgumentException('Invalid configuration received from pepperfm-new.');
+        }
+
+        return $config;
+    }
+
+    protected function applyLauncherEnvironment(string $content): string
+    {
+        $config = $this->launcherConfig();
+        if ($config === null) {
+            return $content;
+        }
+
+        $values = [
+            'APP_URL' => $config['app_url'],
+            'DB_CONNECTION' => $config['database'],
+        ];
+
+        if ($config['database'] === 'sqlite') {
+            // Laravel config/database.php falls back to database/database.sqlite
+            // only when DB_DATABASE is absent or commented out.
+            foreach (['DB_HOST', 'DB_PORT', 'DB_DATABASE', 'DB_USERNAME', 'DB_PASSWORD'] as $key) {
+                $pattern = '/^[ \t]*#?[ \t]*' . preg_quote($key, '/') . '=(.*)$/m';
+                $content = (string) preg_replace_callback(
+                    $pattern,
+                    static fn(array $matches): string => "# $key={$matches[1]}",
+                    $content,
+                );
+            }
+        } else {
+            $values += [
+                'DB_HOST' => $config['db_host'],
+                'DB_PORT' => $config['db_port'],
+                'DB_DATABASE' => $config['db_name'],
+                'DB_USERNAME' => $config['db_user'],
+                'DB_PASSWORD' => $config['db_password'],
+            ];
+        }
+
+        if ($config['runtime'] === 'sail') {
+            $values += [
+                'APP_PORT' => $config['app_port'],
+                'REDIS_PORT' => $config['redis_port'],
+                'FORWARD_REDIS_PORT' => $config['redis_port'],
+                'COMPOSE_PROFILES' => $config['database'] === 'pgsql' ? 'pgsql' : '',
+            ];
+
+            if ($config['database'] === 'pgsql') {
+                $values['FORWARD_DB_PORT'] = $config['db_forward_port'];
+            }
+        }
+
+        foreach ($values as $key => $value) {
+            $content = $this->replaceOrAppendEnv(
+                $content,
+                $key,
+                $this->dotenvLiteral((string) $value),
+            );
+        }
+
+        return $content;
+    }
+
+    protected function dotenvLiteral(string $value): string
+    {
+        if ($value === '' || !preg_match('/[\s#"\'\\\\$]/', $value)) {
+            return $value;
+        }
+
+        return '"' . str_replace(
+            ['\\', '"', '$'],
+            ['\\\\', '\\"', '\$'],
+            $value,
+        ) . '"';
     }
 
     protected function resolveServiceHost(string $configuredHost, string $dockerHost, bool $useDockerNetwork): string
@@ -614,6 +711,15 @@ PHP;
 
     protected function askCommandRuntime(): void
     {
+        $launcher = $this->launcherConfig();
+
+        if ($launcher !== null && in_array($launcher['runtime'] ?? null, [self::COMMAND_RUNTIME_HOST, self::COMMAND_RUNTIME_SAIL], true)) {
+            $this->commandRuntime = $launcher['runtime'];
+            note("Command runtime selected by pepperfm-new: {$this->commandRuntime}.");
+
+            return;
+        }
+
         if ($this->runningInsideSail()) {
             $this->commandRuntime = self::COMMAND_RUNTIME_HOST;
 
