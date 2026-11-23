@@ -19,6 +19,14 @@ it('refuses to overwrite an existing admin frontend file before copying anything
     expect((new AdminPanelFrontendInstaller())->canInstall())->toBeFalse();
 });
 
+it('keeps the replaceable package hash aligned with the starter skeleton', function (): void {
+    $hashes = (new ReflectionClass(AdminPanelFrontendInstaller::class))
+        ->getReflectionConstant('REPLACEABLE_SKELETON_HASHES')
+        ->getValue();
+
+    expect($hashes['package.json'])->toBe(hash_file('sha256', base_path('package.json')));
+});
+
 it('allows replacing pristine Laravel skeleton files on first installation', function (): void {
     $file = Mockery::mock();
     $file->shouldReceive('getRelativePathname')->twice()->andReturn('package.json');
@@ -29,7 +37,7 @@ it('allows replacing pristine Laravel skeleton files on first installation', fun
     File::shouldReceive('exists')->twice()->andReturnTrue();
     File::shouldReceive('hash')->andReturnUsing(
         static fn(string $path): string => $path === base_path('package.json')
-            ? 'f528ccaa1fcffb50a4a16579408935f12ab3c5ca9167a3218e574d007fac185e'
+            ? 'faa8b9989e837f0c2243b029ba361c08965393c860bd4211d4c2a7c7592dab5e'
             : 'admin-stub-hash',
     );
     File::shouldReceive('get')->once()->andReturn('original package.json');
