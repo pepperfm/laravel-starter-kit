@@ -62,11 +62,21 @@ database, runs `artisan migrate` on the host (for the explicit `--database=pgsql
 then chooses and installs/builds frontend dependencies. The starter hook deliberately does
 **not** run those stages a second time. Installer supports `--npm`, `--pnpm`,
 `--bun`, `--yarn` and `--no-node`, but currently **defaults to npm** even
-when another lockfile is present. To choose Bun for a new project, run
-`laravel new example-app --using=pepperfm/laravel-starter-kit --bun`.
-The starter hook cannot change the parent Installer's already-selected package
-manager. Manual `starter:setup` instead prompts for a package manager when
-you choose to install frontend dependencies.
+when another lockfile is present. To use PostgreSQL and Bun together, run
+`laravel new example-app --using=pepperfm/laravel-starter-kit --database=pgsql --bun`.
+
+**Database selection:** Laravel Installer v5.33.0 does not show a database prompt
+for this command: without `--database`, it selects SQLite and later replaces the
+starter's `DB_CONNECTION=pgsql` (even if `.env.example` originally specified it).
+With `--database=pgsql`, the database and credentials must already be reachable
+from the host because the Installer migrates there. The starter hook cannot
+change the parent Installer's database or package-manager options.
+
+**Application URL:** Laravel Installer defaults to `APP_URL=http://localhost:8000`
+when a project is not recognized as parked by Herd/Valet. This is appropriate
+for `php artisan serve`; change `.env` to your actual local URL if you use a
+local web server or Flock domain. Manual `starter:setup` prompts for a package
+manager when you choose to install frontend dependencies.
 
 > **Installer limitation:** `laravel new ... --database=pgsql` does not expose a
 > migration opt-out. If you need to review/decline migrations or cannot migrate from the
