@@ -7,7 +7,7 @@ namespace App\Setup;
 use Illuminate\Support\Facades\File;
 use Symfony\Component\Process\ExecutableFinder;
 
-use function Laravel\Prompts\{info, note, warning};
+use function Laravel\Prompts\{info, note, select, warning};
 
 final class AdminPanelFrontendInstaller
 {
@@ -20,7 +20,17 @@ final class AdminPanelFrontendInstaller
 
     public function installDependencies(bool $usingSail, string $sailCommand, StreamingCommandRunner $runner): bool
     {
-        $command = $this->nodeInstallCommand($usingSail, $sailCommand);
+        $manager = select(
+            label: 'Which frontend package manager should be used?',
+            options: [
+                'bun' => 'Bun',
+                'npm' => 'npm',
+                'pnpm' => 'pnpm',
+                'yarn' => 'Yarn',
+            ],
+            default: $this->determinePackageManager(),
+        );
+        $command = $this->nodeInstallCommand($usingSail, $sailCommand, $manager);
 
         info('→ Running: ' . implode(' ', $command));
 
@@ -37,8 +47,8 @@ final class AdminPanelFrontendInstaller
         }
 
         $build = $usingSail
-            ? [$sailCommand, 'exec', '-T', '-u', 'sail', (string) env('APP_SERVICE', 'app'), $command[count($command) - 2], 'run', 'build']
-            : [$command[0], 'run', 'build'];
+            ? [$sailCommand, 'exec', '-T', '-u', 'sail', (string) env('APP_SERVICE', 'app'), $manager, 'run', 'build']
+            : [$manager, 'run', 'build'];
 
         info('→ Running: ' . implode(' ', $build));
 
@@ -47,6 +57,8 @@ final class AdminPanelFrontendInstaller
 
             return false;
         }
+
+        $this->removeOtherLockfiles($manager);
 
         return true;
     }
@@ -179,9 +191,9 @@ final class AdminPanelFrontendInstaller
     /**
      * @return array<int, string>
      */
-    private function nodeInstallCommand(bool $usingSail, string $sailCommand): array
+    private function nodeInstallCommand(bool $usingSail, string $sailCommand, ?string $manager = null): array
     {
-        $manager = $this->determinePackageManager();
+        $manager ??= $this->determinePackageManager();
 
         if ($usingSail) {
             return [$sailCommand, 'exec', '-T', '-u', 'sail', (string) env('APP_SERVICE', 'app'), $manager, 'install'];
@@ -196,10 +208,30 @@ final class AdminPanelFrontendInstaller
             file_exists(base_path('pnpm-lock.yaml')) => 'pnpm',
             file_exists(base_path('bun.lock')), file_exists(base_path('bun.lockb')) => 'bun',
             file_exists(base_path('yarn.lock')) => 'yarn',
-            default => 'npm',
+            default => 'bun',
         };
 
         return $manager;
+    }
+
+    private function removeOtherLockfiles(string $manager): void
+    {
+        $lockfiles = [
+            'bun' => ['bun.lock', 'bun.lockb'],
+            'npm' => ['package-lock.json'],
+            'pnpm' => ['pnpm-lock.yaml'],
+            'yarn' => ['yarn.lock'],
+        ];
+
+        foreach ($lockfiles as $owner => $names) {
+            if ($owner === $manager) {
+                continue;
+            }
+
+            foreach ($names as $name) {
+                File::delete(base_path($name));
+            }
+        }
     }
 
     private function hostCommandExists(string $command): bool

@@ -53,10 +53,15 @@ hostnames/URLs remain untouched. A custom `FORWARD_DB_PORT` must be reflected
 in the host's `DB_PORT` if used.
 
 **Frontend:** Admin preset only publishes project files in the Installer hook;
-the Installer then selects ONE package manager and installs/builds. With
-`--no-node` the hook receives `LARAVEL_INSTALLER_NO_NODE=1` and neither phase
-installs Node dependencies. Manual `starter:setup` can install dependencies
-after publication and uses the applicable lockfile.
+the Installer then selects ONE package manager and installs/builds. It defaults
+to npm unless one of `--npm`, `--bun`, `--pnpm`, `--yarn` is selected.
+The separate starter hook cannot change the parent command's input options.
+With `--no-node` the hook receives `LARAVEL_INSTALLER_NO_NODE=1` and neither phase
+installs Node dependencies. Manual `starter:setup` prompts for a package
+manager when frontend installation is requested. The starter does not generate
+GitHub Actions workflows; Laravel Installer v5.33.0 incorrectly tries to edit
+a missing `.github/workflows/tests.yml` during Pest setup (guarded on upstream
+master).
 
 ## Important limitation of Option A
 

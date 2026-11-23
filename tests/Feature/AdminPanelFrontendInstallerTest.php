@@ -65,9 +65,25 @@ it('uses supported Nuxt UI and Inertia versions in the admin preset', function (
         flags: JSON_THROW_ON_ERROR,
     );
 
+    $root = json_decode(
+        (string) file_get_contents(base_path('package.json')),
+        true,
+        flags: JSON_THROW_ON_ERROR,
+    );
+
     expect($dependencies['dependencies']['@nuxt/ui'])->toBe('^4.12.0')
         ->and($dependencies['dependencies']['@inertiajs/vue3'])->toBe('^3.9.1')
-        ->and($dependencies['devDependencies']['@vitejs/plugin-vue'])->toBe('^6.0.10');
+        ->and($dependencies['devDependencies']['@vitejs/plugin-vue'])->toBe('^6.0.10')
+        ->and($dependencies['devDependencies']['laravel-vite-plugin'])->toBe('^2.0.1')
+        ->and($root['devDependencies']['laravel-vite-plugin'])->toBe('^2.0.1');
+});
+
+it('uses the frontend manager selected for manual installation', function (): void {
+    $method = new ReflectionMethod(AdminPanelFrontendInstaller::class, 'nodeInstallCommand');
+    $installer = new AdminPanelFrontendInstaller();
+
+    expect($method->invoke($installer, false, './sail', 'pnpm'))->toBe(['pnpm', 'install'])
+        ->and(array_slice($method->invoke($installer, true, './sail', 'npm'), -2))->toBe(['npm', 'install']);
 });
 
 it('installs frontend dependencies through Sail without a TTY or root-owned files', function (): void {
