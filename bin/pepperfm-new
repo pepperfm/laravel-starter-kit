@@ -60,29 +60,99 @@ function askPort(string $question, int $default): int
     }
 }
 
-/** @param array<string, mixed> $config */
-function updateApplicationUrl(string $file, array $config): void
+/**
+ * Restore choices after Laravel Installer's built-in .env rewriting.
+ * The example file gets local-development placeholders, not host secrets.
+ *
+ * @param array<string, string> $config
+ */
+function finalizeEnvironment(string $file, array $config, string $projectName, bool $example = false): void
 {
     if (!is_file($file)) {
         throw new RuntimeException("Installer did not create $file");
     }
 
     $content = (string) file_get_contents($file);
-    $line = 'APP_URL=' . $config['app_url'];
-    $updated = preg_replace_callback(
-        '/^APP_URL=.*$/m',
-        static fn (): string => $line,
-        $content,
-        1,
-        $count,
-    );
+    $values = [
+        'APP_URL' => $config['app_url'],
+        'DB_CONNECTION' => $config['database'],
+    ];
 
-    if ($count === 0) {
-        $updated = rtrim($content) . PHP_EOL . $line . PHP_EOL;
+    $commentDatabase = $config['database'] === 'sqlite';
+
+    if (!$commentDatabase) {
+        $values += [
+            'DB_HOST' => $example ? '127.0.0.1' : $config['db_host'],
+            'DB_PORT' => $example && $config['runtime'] === 'host'
+                ? ($config['database'] === 'pgsql' ? '5432' : '3306')
+                : $config['db_port'],
+            'DB_DATABASE' => $example ? $projectName : $config['db_name'],
+            'DB_USERNAME' => $example
+                ? ($config['runtime'] === 'sail' ? $projectName : 'postgres')
+                : $config['db_user'],
+            'DB_PASSWORD' => $example
+                ? ($config['runtime'] === 'sail' ? $projectName : '')
+                : $config['db_password'],
+        ];
     }
 
-    if ($updated === null || file_put_contents($file, $updated) === false) {
-        throw new RuntimeException("Could not update $file");
+    if ($config['runtime'] === 'sail') {
+        $values += [
+            'APP_PORT' => $config['app_port'],
+            'REDIS_PORT' => $config['redis_port'],
+            'FORWARD_REDIS_PORT' => $config['redis_port'],
+            'COMPOSE_PROFILES' => $config['database'] === 'pgsql' ? 'pgsql' : '',
+        ];
+
+        if ($config['database'] === 'pgsql') {
+            $values['FORWARD_DB_PORT'] = $config['db_forward_port'];
+        }
+    } elseif ($example && $config['database'] !== 'pgsql') {
+        $values['COMPOSE_PROFILES'] = '';
+    }
+
+    foreach ($values as $key => $value) {
+        $literal = (string) $value;
+
+        if ($literal !== '' && preg_match('/[\s#"\'\\\\$]/', $literal)) {
+            $literal = '"' . str_replace(
+                ['\\', '"', '$'],
+                ['\\\\', '\\"', '\$'],
+                $literal,
+            ) . '"';
+        }
+
+        $line = $key . '=' . $literal;
+        $pattern = '/^[ \t]*#?[ \t]*' . preg_quote($key, '/') . '=.*$/m';
+        $updated = preg_replace_callback(
+            $pattern,
+            static fn (): string => $line,
+            $content,
+            1,
+            $count,
+        );
+
+        if ($updated === null) {
+            throw new RuntimeException("Unable to format $key in $file");
+        }
+
+        $content = $count === 0
+            ? rtrim($updated) . PHP_EOL . $line . PHP_EOL
+            : $updated;
+    }
+
+    if ($commentDatabase) {
+        foreach (['DB_HOST', 'DB_PORT', 'DB_DATABASE', 'DB_USERNAME', 'DB_PASSWORD'] as $key) {
+            $content = (string) preg_replace_callback(
+                '/^[ \t]*#?[ \t]*' . preg_quote($key, '/') . '=(.*)$/m',
+                static fn (array $matches): string => '# ' . $key . '=' . $matches[1],
+                $content,
+            );
+        }
+    }
+
+    if (file_put_contents($file, $content) === false) {
+        throw new RuntimeException("Unable to write $file");
     }
 }
 
@@ -249,8 +319,8 @@ try {
         exit($exitCode > 0 ? $exitCode : 1);
     }
 
-    updateApplicationUrl($directory . '/.env', $config);
-    updateApplicationUrl($directory . '/.env.example', $config);
+    finalizeEnvironment($directory . '/.env', $config, $normalizedName);
+    finalizeEnvironment($directory . '/.env.example', $config, $normalizedName, example: true);
 
     fwrite(STDOUT, "\nProject created with APP_URL=$appUrl.\n");
 
