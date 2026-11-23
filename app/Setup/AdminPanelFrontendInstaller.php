@@ -71,6 +71,7 @@ final class AdminPanelFrontendInstaller
      */
     private const array REPLACEABLE_SKELETON_HASHES = [
         'package.json' => 'faa8b9989e837f0c2243b029ba361c08965393c860bd4211d4c2a7c7592dab5e',
+        'bun.lock' => '7f53325a981f3be9bbade839873ebffbf189492a7fd7fb59439af866fc0d6769',
         'vite.config.js' => 'b79dffc57362f908a5f6a451c4c4bc1543a7f43b596300691f754f5c8b320312',
         'resources/css/app.css' => 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
     ];

@@ -25,6 +25,7 @@ it('keeps the replaceable package hash aligned with the starter skeleton', funct
         ->getValue();
 
     expect($hashes['package.json'])->toBe(hash_file('sha256', base_path('package.json')));
+    expect($hashes['bun.lock'])->toBe(hash_file('sha256', base_path('bun.lock')));
 });
 
 it('allows replacing pristine Laravel skeleton files on first installation', function (): void {
