@@ -82,8 +82,12 @@ final class SetupCommand extends Command
             return self::FAILURE;
         }
 
-        // Laravel Installer itself always has Composer on the host. Do this before
-        // building a Sail image so the bind-mounted vendor directory is final.
+        // Prepare the selected runtime before installing optional packages.
+        // Laravel Installer's initial create-project still runs on the host.
+        if (!$this->configureEnvironment() || !$this->prepareCommandRuntime()) {
+            return self::FAILURE;
+        }
+
         if (!$this->requirePackages($this->installedPackages, dev: false)
             || !$this->requirePackages($this->installedDevPackages, dev: true)) {
             warning('⚠ Setup stopped because package installation failed.');
@@ -92,9 +96,6 @@ final class SetupCommand extends Command
         }
 
         if ($this->adminFrontendRequested && !$adminPanelFrontendInstaller->publish()) {
-            return self::FAILURE;
-        }
-        if (!$this->configureEnvironment() || !$this->prepareCommandRuntime()) {
             return self::FAILURE;
         }
 
@@ -242,13 +243,7 @@ final class SetupCommand extends Command
             return true;
         }
 
-        $command = ['composer', 'require', '--with-all-dependencies'];
-
-        if ($dev) {
-            $command[] = '--dev';
-        }
-
-        $command = array_merge($command, $packages);
+        $command = $this->buildComposerRequireCommand($packages, $dev, $this->usingSail());
 
         info('→ Running: ' . implode(' ', $command));
 
@@ -259,6 +254,23 @@ final class SetupCommand extends Command
         warning('⚠ Failed to install: ' . implode(', ', $packages));
 
         return false;
+    }
+
+    /**
+     * @param array<int, string> $packages
+     * @return array<int, string>
+     */
+    protected function buildComposerRequireCommand(array $packages, bool $dev, bool $usingSail): array
+    {
+        $command = $usingSail
+            ? [$this->getSailCommand(), 'composer', 'require', '--with-all-dependencies']
+            : ['composer', 'require', '--with-all-dependencies'];
+
+        if ($dev) {
+            $command[] = '--dev';
+        }
+
+        return [...$command, ...$packages];
     }
 
     /**
@@ -618,7 +630,7 @@ PHP;
                 self::COMMAND_RUNTIME_AUTO => 'Auto-detect running Sail',
             ],
             default: $this->sailAppContainerRunning() ? self::COMMAND_RUNTIME_SAIL : self::COMMAND_RUNTIME_HOST,
-            hint: 'Composer runs on the host; this controls Artisan and manual frontend commands.',
+            hint: 'The initial Laravel installation uses host Composer; optional packages and Artisan use this runtime.',
         );
 
         $this->sailProxyAvailable = null;
@@ -656,9 +668,9 @@ PHP;
         }
 
         if (!$this->sailAppContainerRunning() && !confirm(
-            label: 'Start Sail after installing the Composer packages?',
+            label: 'Start Sail before installing optional Composer packages?',
             default: true,
-            hint: 'The Docker build will happen after Composer and preset file publication.',
+            hint: 'The Docker build must complete before package installation inside Sail.',
         )) {
             note('Setup cancelled before changing project files.');
 

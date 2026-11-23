@@ -47,14 +47,15 @@ before any project files are modified.
 
 **During that hook:**
 
-- Optional Composer packages are installed on the **host**, before any Docker build; packages
-  already present in `composer.json` are not required again.
+- Laravel Installer initially creates the project with **host Composer**. Optional Composer
+  packages are installed through **Sail** when selected (after the container starts), or on
+  the host when Host is selected; already-installed packages are skipped.
 - Preset files and vendor migrations are published, without running migrations yet.
 - `.env` is prepared for host connections, while `config/database.php` resolves loopback
   PostgreSQL/Redis to service names when the application runs under Sail. Custom remote
   hostnames/URLs and existing non-placeholder credentials are preserved.
-- If Sail is selected, Docker Compose starts after Composer and waits for service health.
-  Its full build output is streamed to the terminal.
+- If Sail is selected, Docker Compose starts before optional Composer packages are installed
+  and waits for service health. Its full build output is streamed to the terminal.
 
 **After that hook, Laravel Installer resumes:** it configures `APP_URL` and the selected
 database, runs `artisan migrate` on the host (for the explicit `--database=pgsql` flag),
@@ -96,8 +97,8 @@ php artisan starter:setup --preset=full --no-post --no-migrate --skip-node
 
 Manual setup asks separately whether to run pending migrations and install frontend
 dependencies. Use `--no-migrate` or `--skip-node` to suppress those steps. A manually
-selected Sail runtime still requires host Composer, but the remaining Artisan and optional
-frontend commands run inside Sail once healthy.
+selected Sail runtime still requires host Composer to invoke the setup command,
+but optional Composer packages, Artisan and optional frontend commands run inside Sail once healthy.
 
 | Preset | Includes |
 | --- | --- |

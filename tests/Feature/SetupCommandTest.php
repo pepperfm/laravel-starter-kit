@@ -275,6 +275,18 @@ it('resolves host and Docker database and Redis service names without rewriting 
 });
 
 
+it('routes optional Composer requirements through Sail when selected', function (): void {
+    $command = app(SetupCommand::class);
+    $build = new ReflectionMethod($command, 'buildComposerRequireCommand');
+    $sailCommand = (new ReflectionMethod($command, 'getSailCommand'))->invoke($command);
+
+    expect($build->invoke($command, ['laravel/telescope'], true, true))->toBe([
+        $sailCommand, 'composer', 'require', '--with-all-dependencies', '--dev', 'laravel/telescope',
+    ])->and($build->invoke($command, ['laravel/horizon'], false, false))->toBe([
+        'composer', 'require', '--with-all-dependencies', 'laravel/horizon',
+    ]);
+});
+
 it('skips unchanged Composer requirements on repeated setup', function (): void {
     $command = app(SetupCommand::class);
     $method = new ReflectionMethod($command, 'missingPackages');

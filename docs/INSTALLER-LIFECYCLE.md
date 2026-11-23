@@ -12,7 +12,7 @@ Run `laravel --version` on the actual machine before reproduction.
 | 1. `composer create-project` | Installer / host | Custom `--using` kits run Composer scripts. `LARAVEL_INSTALLER_DEFER_HOOKS=1` is set during this stage. |
 | 2. Composer scripts | Composer / host | `post-root-package-install` ensures `.env` exists. Our `post-create-project-cmd` skips key generation with the defer flag; direct `composer create-project` still generates it. |
 | 3. `composer run post-root-package-install`, `artisan key:generate` | Installer / host | Explicit initialization, before our hook. Avoids a second key rotation. |
-| 4. `extra.laravel.installer.post-create-project` | Installer / host | Runs `artisan starter:setup --installer-hook`. Hook prompts, validates files/tools, requires only missing Composer packages, publishes frontend files and vendor assets, prepares host-compatible `.env`, optionally starts Sail and waits for DB/Redis health, then runs selected *non-migration* Artisan commands. |
+| 4. `extra.laravel.installer.post-create-project` | Installer / host | Runs `artisan starter:setup --installer-hook`. Hook prompts and validates files/tools, prepares host-compatible `.env`, optionally starts Sail and waits for DB/Redis health, installs missing Composer packages in the selected runtime, publishes frontend files and vendor assets, then runs selected *non-migration* Artisan commands. |
 | 5. `APP_URL`, `DB_CONNECTION` and DB placeholders | Installer / host | Installer modifies both `.env` and `.env.example` for the selected driver. Existing custom DB names/credentials are retained unless they match Installer's placeholder strings. |
 | 6. `artisan migrate` | Installer / host | With explicit `--database=pgsql`, migration is unconditionally attempted. The starter hook must NOT run it earlier. |
 | 7. Git/Pest integration | Installer / host | Optional flags only. |
@@ -27,9 +27,11 @@ upgrading the globally installed Laravel Installer.
 
 ## Ownership and runtime boundaries
 
-**Composer:** Host first, always. This is already a prerequisite of `laravel new`;
-building a PHP image merely to run `composer require` causes an unnecessary long
-build and complicates dependency failure recovery.
+**Composer:** Laravel Installer's initial `composer create-project` always runs on
+the host. For the starter hook's optional `composer require` commands, Sail mode
+starts the app container first and runs Composer there; Host mode keeps running
+Composer on the host. The host must still satisfy the initial project's PHP and
+Composer requirements.
 
 **Artisan publication:** After dependency installation, before DB migration.
 Runs through Sail if selected and running, otherwise on the host. Sanctum API
@@ -38,10 +40,10 @@ calls Composer). Vendor migrations for Pulse, Telescope, etc. are published
 before the Installer's migration stage.
 
 **Docker:** Only when Sail is selected. `docker compose --progress plain up -d
---build --wait --wait-timeout 180` is run with streaming output after Composer
-and admin preset publication. Already-running containers use `up -d --wait`
-without a rebuild. Docker Compose healthchecks establish DB/Redis readiness.
-A Compose failure stops the setup hook.
+--build --wait --wait-timeout 180` is run with streaming output before the
+starter hook's optional Composer packages are installed. Already-running
+containers use `up -d --wait` without a rebuild. Docker Compose healthchecks
+establish DB/Redis readiness. A Compose failure stops the setup hook.
 
 **Database / Redis:** The main `.env` uses host-reachable addresses so the
 Installer's *host* migration can succeed. In the application container
@@ -79,6 +81,9 @@ Other constraints:
   does **not** remove this Installer requirement.
 - Host mode assumes PostgreSQL/Redis are already reachable; it does not
   start containers.
+- The Laravel Installer still performs its own later migrations on the host
+  when explicitly requested with `--database=pgsql`, even if Sail was chosen
+  for the starter hook.
 - Docker Compose must be reachable if Sail mode is selected.
 - Installer Node operations are host operations, not Sail operations. Use
   `--no-node` and install manually inside Sail if the host lacks the chosen manager.
