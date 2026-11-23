@@ -19,7 +19,9 @@ function ask(string $question, string $default = ''): string
         throw new RuntimeException('Interactive input ended unexpectedly.');
     }
 
-    return trim($answer) ?: $default;
+    $value = trim($answer);
+
+    return $value === '' ? $default : $value;
 }
 
 /**
