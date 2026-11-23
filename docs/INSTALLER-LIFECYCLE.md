@@ -16,7 +16,7 @@ Run `laravel --version` on the actual machine before reproduction.
 | 5. `APP_URL`, `DB_CONNECTION` and DB placeholders | Installer / host | Installer modifies both `.env` and `.env.example` for the selected driver. Existing custom DB names/credentials are retained unless they match Installer's placeholder strings. |
 | 6. `artisan migrate` | Installer / host | With explicit `--database=pgsql`, migration is unconditionally attempted. The starter hook must NOT run it earlier. |
 | 7. Git/Pest integration | Installer / host | Optional flags only. |
-| 8. Node manager selection, install, build | Installer / host | Honors `--bun`, `--npm`, `--pnpm`, `--yarn`, `--no-node`; otherwise lockfile detection and optional interactive prompt. Installer removes lockfiles from other managers. |
+| 8. Node manager selection, install, build | Installer / host | Honors `--bun`, `--npm`, `--pnpm`, `--yarn`, `--no-node`; without an explicit manager flag, the parent Installer defaults to npm. Installer removes lockfiles from other managers. |
 | 9. Boost and closing instructions | Installer / host | Optional Boost work and final output. |
 
 References in `NewCommand.php` v5.33.0: `execute()` lines 630–760;
